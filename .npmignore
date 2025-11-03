@@ -1,0 +1,33 @@
+# Source files
+src/
+examples/
+
+# Development files
+tsconfig.json
+.gitignore
+.eslintrc*
+.prettierrc*
+
+# Development tools
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing and coverage
+tests/
+coverage/
+.nyc_output/
+*.test.ts
+*.spec.ts
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Build artifacts (but not dist)
+*.log
+npm-debug.log*
+yarn-error.log*
