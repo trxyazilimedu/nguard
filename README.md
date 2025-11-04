@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="./docs/tr/logo.png" alt="Nguard Logo" width="200" />
+</div>
+
 # Nguard
 
 A Next.js 16 compatible session management library with **callback-based authentication**. Flexible, type-safe, and works with any backend.
@@ -31,9 +35,7 @@ The wizard will automatically create:
 - ✅ `.env.local` - Environment variables template
 - ✅ TypeScript path aliases
 
-### Manual Setup
-
-For detailed manual setup, see [CLI-QUICK-START.md](./CLI-QUICK-START.md)
+> 📖 For detailed setup wizard guide, see [CLI-SETUP.md](./docs/en/CLI-SETUP.md)
 
 ## Quick Example (After Setup)
 
@@ -142,21 +144,17 @@ export function LoginForm() {
 
 ## Documentation
 
-📖 **Getting Started:**
-- **[CLI Quick Start](./CLI-QUICK-START.md)** - 2-minute setup guide
-- **[CLI Setup Guide](./docs/en/CLI-SETUP.md)** - Complete interactive setup wizard guide
+### 🚀 Quick Start
+- **[CLI Setup Wizard](./docs/en/CLI-SETUP.md)** - Interactive setup guide (2 minutes)
 
-📚 **Full Documentation:**
-- **[Turkish (Türkçe)](./docs/tr/)** - Kapsamlı Türkçe dokümantasyon
-- **[English](./docs/en/)** - Complete English documentation
+### 📚 API Reference & Usage
+- **[API Reference](./docs/en/API-CLIENT.md)** - Hooks, methods, and response types
+- **[Middleware Guide](./docs/en/MIDDLEWARE.md)** - Built-in middleware system
+- **[Session Validation](./docs/en/VALIDATION.md)** - Validation patterns and examples
 
-### Key Documentation
-- [QUICKSTART](./docs/en/QUICKSTART.md) - Quick start guide
-- [CLI-SETUP](./docs/en/CLI-SETUP.md) - CLI Setup Wizard guide
-- [API Reference](./docs/en/API-CLIENT.md) - Client API reference
-- [Middleware Guide](./docs/en/MIDDLEWARE.md) - Middleware system
-- [Session Validation](./docs/en/VALIDATION.md) - Validation patterns
-- [SETUP-REFERENCE](./SETUP-REFERENCE.md) - Quick reference checklist
+### 🌐 Languages
+- **[Türkçe Dokümantasyon](./docs/tr/)** - Turkish documentation
+- **[English Documentation](./docs/en/)** - English documentation
 
 ## Security
 
@@ -176,11 +174,3 @@ NGUARD_SECRET=your-secret-min-32-chars
 ## License
 
 MIT
-
----
-
-## Documentation Links
-
-🇹🇷 **Türkçe Kullanıcılar:** [docs/tr/README.md](./docs/tr/README.md)
-
-🇬🇧 **English Users:** [docs/en/README.md](./docs/en/README.md)
