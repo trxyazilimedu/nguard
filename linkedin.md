@@ -1,28 +1,28 @@
-# Nguard - Next.js 16+ Session Management Library
+# Nguard - Next.js 16+ Oturum Yönetimi Kütüphanesi
 
-## 🚀 Just Shipped: Nguard v0.3.4
+## 🚀 Yeni Sürüm: Nguard v0.3.4
 
-I'm excited to announce the latest release of **Nguard**, a powerful yet simple session management library for Next.js 16+.
+**Nguard**'ın en yeni sürümünü duyurmaktan heyecan duyuyorum! Next.js 16+ için güçlü ve basit bir oturum yönetimi kütüphanesi.
 
-### What is Nguard?
+### Nguard Nedir?
 
-Nguard is a **zero-config authentication solution** that makes session management effortless. It provides:
+Nguard, **sıfır konfigürasyon kimlik doğrulama çözümü** olup, oturum yönetimini çok kolaylaştırır:
 
-✅ **JWT-based Sessions** - Secure, stateless authentication
-✅ **Zero Configuration** - Works out of the box with `npx nguard-setup`
-✅ **TypeScript First** - 100% type-safe
-✅ **Works with Any Backend** - Spring, Express, Django, Python, or any REST API
-✅ **Server & Client Hooks** - Both server components and client-side hooks
-✅ **Built-in Middleware** - Role-based access control, rate limiting, CORS
-✅ **Session Validation** - Validate and refresh sessions anytime
+✅ **JWT Tabanlı Oturumlar** - Güvenli, durumsuz kimlik doğrulama
+✅ **Sıfır Konfigürasyon** - `npx nguard-setup` ile hemen başla
+✅ **TypeScript Odaklı** - %100 tip güvenliği
+✅ **Herhangi Bir Backend ile Çalışır** - Spring, Express, Django, Python veya herhangi bir REST API
+✅ **Sunucu & İstemci Hook'ları** - Hem server component'ler hem de client-side hook'lar
+✅ **Yerleşik Ara Yazılımlar** - Rol tabanlı erişim kontrol, hız sınırlandırma, CORS
+✅ **Oturum Doğrulama** - İstediğin zaman oturumu doğrula ve yenile
 
-### Key Features in v0.3.4
+### v0.3.4 ile Gelen Yenilikler
 
-**Server-Side Session Management:**
+**Sunucu Tarafı Oturum Yönetimi:**
 ```typescript
 import { nguard } from '@/lib/auth';
 
-// Create session
+// Oturum oluştur
 const { session, setCookieHeader } = await nguard.createSession({
   id: 'user-123',
   email: 'user@example.com',
@@ -30,11 +30,11 @@ const { session, setCookieHeader } = await nguard.createSession({
   expires: Date.now() + 24 * 60 * 60 * 1000,
 });
 
-// Logout with cleanup
+// Temizleme ile çıkış yap
 const cookieHeader = await nguard.logout(session);
 ```
 
-**Client-Side Hooks:**
+**İstemci Tarafı Hook'ları:**
 ```typescript
 const { session, loading } = useSession();
 const { login, isLoading } = useLogin();
@@ -42,53 +42,53 @@ const { logout, isLoading } = useLogout();
 const { validate, isValid } = useValidateSession();
 ```
 
-**Server Components:**
+**Server Component'ler:**
 ```typescript
 import { auth } from '@/lib/auth';
 
 export default async function Dashboard() {
   const session = await auth();
-  return <div>Welcome, {session?.email}</div>;
+  return <div>Hoşgeldin, {session?.email}</div>;
 }
 ```
 
-### How It Works
+### Nasıl Çalışır?
 
-1. **Install**: `npm install nguard`
-2. **Setup**: `npx nguard-setup` - Interactive wizard
-3. **Use**: Start building with hooks and server functions
+1. **Kur**: `npm install nguard`
+2. **Ayarla**: `npx nguard-setup` - İnteraktif sihirbaz
+3. **Kullan**: Hook'lar ve sunucu fonksiyonları ile geliştir
 
-The wizard automatically creates:
-- `lib/auth.ts` - Server utilities
-- API routes for login, logout, validate, refresh
-- `proxy.ts` - Next.js 16 middleware configuration
-- Environment template
+Sihirbaz otomatik olarak şunları oluşturur:
+- `lib/auth.ts` - Sunucu yardımcı işlevleri
+- Giriş, çıkış, doğrulama, yenileme API route'ları
+- `proxy.ts` - Next.js 16 ara yazılımı yapılandırması
+- Ortam değişkenleri şablonu
 
-### Why Nguard?
+### Neden Nguard?
 
-- **No vendor lock-in** - Works with your existing backend
-- **Flexible session structure** - Store any data you need
-- **Production-ready** - HTTP-only cookies, CSRF protection, JWT validation
-- **Developer-friendly** - Great DX with TypeScript and hooks
-- **Composable middleware** - Build complex auth flows easily
+- **Vendor bağımlılığı yok** - Mevcut backend'inizle çalışır
+- **Esnek oturum yapısı** - İhtiyacınız olan herhangi bir veriyi saklayın
+- **Üretime hazır** - HTTP-only cookie'ler, CSRF koruması, JWT doğrulaması
+- **Geliştirici dostu** - TypeScript ve hook'lar ile harika geliştirici deneyimi
+- **Birleştirilebilir ara yazılımlar** - Karmaşık kimlik doğrulama akışları kolaylıkla oluştur
 
-### Documentation
+### Dokümantasyon
 
-Complete documentation available in English and Turkish:
-- 📖 CLI Setup Guide
-- 🚀 Quick Start
-- 📚 API Reference
-- ⚙️ Middleware Guide
-- ✔️ Session Validation Guide
+Tam dokümantasyon İngilizce ve Türkçe olarak mevcut:
+- 📖 CLI Kurulum Rehberi
+- 🚀 Hızlı Başlangıç
+- 📚 API Referansı
+- ⚙️ Ara Yazılım Rehberi
+- ✔️ Oturum Doğrulama Rehberi
 
-### Getting Started
+### Hızlı Başlangıç
 
 ```bash
 npm install nguard
 npx nguard-setup
 ```
 
-Then wrap your app:
+Sonra uygulamayı sar:
 ```typescript
 import { SessionProvider } from 'nguard/client';
 
@@ -103,18 +103,18 @@ export default function RootLayout({ children }) {
 
 ### GitHub
 
-Open source and free to use. Check it out:
+Açık kaynak ve ücretsiz kullanım. Kontrol et:
 https://github.com/trxyazilimedu/nguard
 
 ### npm
 
-Available on npm registry:
+npm kayıt defterinde mevcut:
 https://www.npmjs.com/package/nguard
 
 ---
 
-**Have feedback or suggestions?** Open an issue on GitHub or reach out!
+**Geri bildirim veya önerilerin var mı?** GitHub'da issue aç veya benimle iletişime geç!
 
-Looking forward to building amazing authentication solutions together! 🔐
+Harika kimlik doğrulama çözümleri geliştirmek için heyecan duyuyorum! 🔐
 
-#NextJS #Authentication #JWT #TypeScript #OpenSource #WebDevelopment #React
+#NextJS #KimlikDoğrulama #JWT #TypeScript #AçıkKaynak #WebGeliştirme #React #Türkçe
