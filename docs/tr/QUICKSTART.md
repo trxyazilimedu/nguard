@@ -140,37 +140,53 @@ export async function GET(request: Request) {
 
 ## 5️⃣ Client Setup (app/layout.tsx)
 
+### Basit Kurulum (Önerilen)
+
+```typescript
+'use client';
+
+import { SessionProvider } from 'nguard/client';
+
+export default function RootLayout({ children }: any) {
+  return (
+    <html>
+      <body>
+        <SessionProvider>
+          {children}
+        </SessionProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+**Otomatik olarak kullanılan varsayılan API endpoints:**
+- Login: `POST /api/auth/login`
+- Logout: `POST /api/auth/logout`
+
+### Custom Callbacks İle (İsteğe Bağlı)
+
+Eğer farklı endpoint'ler kullanmak istersen:
+
 ```typescript
 'use client';
 
 import { SessionProvider, type LoginCallback } from 'nguard/client';
 
-// Callback: Frontend'den login isteği gönder
 const handleLogin: LoginCallback = async (credentials) => {
-  const res = await fetch('/api/auth/login', {
+  const res = await fetch('/auth/login', { // Farklı endpoint
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(credentials),
   });
-
-  if (!res.ok) throw new Error('Login başarısız');
   const data = await res.json();
-  return { user: data.session.user, data: data.session.data };
-};
-
-// Callback: Logout işlemi
-const handleLogout = async () => {
-  await fetch('/api/auth/logout', { method: 'POST' });
+  return { user: data.user, data: data.data };
 };
 
 export default function RootLayout({ children }: any) {
   return (
     <html>
       <body>
-        <SessionProvider
-          onLogin={handleLogin}
-          onLogout={handleLogout}
-        >
+        <SessionProvider onLogin={handleLogin}>
           {children}
         </SessionProvider>
       </body>

@@ -42,11 +42,33 @@ interface SessionContextType {
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
 
 interface SessionProviderProps {
-  children: ReactNode;
+  /**
+   * Child components (optional - can be passed as children)
+   */
+  children?: ReactNode;
+  /**
+   * Cookie name for storing session
+   * @default 'nguard-session'
+   */
   cookieName?: string;
+  /**
+   * Custom login callback
+   * If not provided, uses default: POST /api/auth/login
+   */
   onLogin?: LoginCallback;
+  /**
+   * Custom logout callback
+   * If not provided, uses default: POST /api/auth/logout
+   */
   onLogout?: LogoutCallback;
+  /**
+   * Custom initialize callback
+   * If not provided, tries to decode JWT from cookie
+   */
   onInitialize?: InitializeSessionCallback;
+  /**
+   * Called whenever session changes
+   */
   onSessionChange?: (session: Session | null) => void;
 }
 
@@ -115,14 +137,33 @@ export function SessionProvider({
     initializeSession();
   }, []);
 
-  const login = async <T = any,>(credentials: T) => {
-    if (!onLogin) {
-      throw new Error('onLogin callback is not provided');
+  // Default login handler
+  const defaultLogin = async <T = any,>(credentials: T) => {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Login failed');
     }
+
+    const data = await response.json();
+    return {
+      user: data.session.user,
+      data: data.session.data,
+      token: data.session.token,
+    };
+  };
+
+  const login = async <T = any,>(credentials: T) => {
+    const loginFn = onLogin || defaultLogin;
 
     setIsLoading(true);
     try {
-      const { user, data, token } = await onLogin(credentials);
+      const { user, data, token } = await loginFn(credentials);
 
       // Create session object
       const now = Date.now();
@@ -151,13 +192,23 @@ export function SessionProvider({
     }
   };
 
+  // Default logout handler
+  const defaultLogout = async () => {
+    const response = await fetch('/api/auth/logout', {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      throw new Error('Logout failed');
+    }
+  };
+
   const logout = async () => {
     setIsLoading(true);
     try {
-      // Call custom logout callback if provided
-      if (onLogout) {
-        await onLogout();
-      }
+      // Use custom logout callback if provided, otherwise use default
+      const logoutFn = onLogout || defaultLogout;
+      await logoutFn();
 
       setSession(null);
       setStatus('unauthenticated');

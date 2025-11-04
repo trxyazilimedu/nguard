@@ -1,8 +1,12 @@
 {
   "name": "nguard",
-  "version": "0.1.0",
-  "description": "Next.js 16 compatible session management library with server and client-side support",
+  "version": "0.2.0",
+  "description": "Next.js 16+ session management library with built-in auth() function, callback-based architecture, and zero-config SessionProvider",
   "main": "dist/index.js",
+    "repository": {
+    "type": "git",
+    "url": "https://github.com/trxyazilimedu/nguard.git"
+  },
   "types": "dist/index.d.ts",
   "exports": {
     ".": {

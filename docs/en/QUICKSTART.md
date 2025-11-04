@@ -140,52 +140,53 @@ export async function GET(request: Request) {
 
 ## 5️⃣ Client Setup (app/layout.tsx)
 
+### Simple Setup (Recommended)
+
+```typescript
+'use client';
+
+import { SessionProvider } from 'nguard/client';
+
+export default function RootLayout({ children }: any) {
+  return (
+    <html>
+      <body>
+        <SessionProvider>
+          {children}
+        </SessionProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+**Default API endpoints used automatically:**
+- Login: `POST /api/auth/login`
+- Logout: `POST /api/auth/logout`
+
+### With Custom Callbacks (Optional)
+
+If you need to use different endpoints:
+
 ```typescript
 'use client';
 
 import { SessionProvider, type LoginCallback } from 'nguard/client';
 
-// Callback: Send login request from frontend
 const handleLogin: LoginCallback = async (credentials) => {
-  const res = await fetch('/api/auth/login', {
+  const res = await fetch('/auth/login', { // Custom endpoint
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(credentials),
   });
-
-  if (!res.ok) throw new Error('Login failed');
   const data = await res.json();
-  return { user: data.session.user, data: data.session.data };
-};
-
-// Callback: Handle logout
-const handleLogout = async () => {
-  await fetch('/api/auth/logout', { method: 'POST' });
-};
-
-// Callback: Load session on app start (optional)
-const handleInitialize = async () => {
-  try {
-    const res = await fetch('/api/auth/session');
-    if (res.ok) {
-      const data = await res.json();
-      return data.session;
-    }
-  } catch (error) {
-    console.error('Failed to load session:', error);
-  }
-  return null;
+  return { user: data.user, data: data.data };
 };
 
 export default function RootLayout({ children }: any) {
   return (
     <html>
       <body>
-        <SessionProvider
-          onLogin={handleLogin}
-          onLogout={handleLogout}
-          onInitialize={handleInitialize}
-        >
+        <SessionProvider onLogin={handleLogin}>
           {children}
         </SessionProvider>
       </body>
