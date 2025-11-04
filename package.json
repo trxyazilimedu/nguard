@@ -1,6 +1,6 @@
 {
   "name": "nguard",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Next.js 16+ session management library with built-in auth() function, callback-based architecture, and zero-config SessionProvider",
   "main": "dist/index.js",
   "bin": {
@@ -32,7 +32,7 @@
     "build": "tsc --project tsconfig.json",
     "dev": "tsc --watch",
     "setup": "node --loader ts-node/esm cli/setup.ts",
-    "prepublishOnly": "npm run build && chmod +x dist/cli/setup.js",
+    "prepublishOnly": "npm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
