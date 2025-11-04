@@ -148,7 +148,7 @@ export function SessionProvider({
                 data: payload.data,
               };
             } catch (e) {
-              console.warn('Failed to decode session token');
+              // Token decode failed, session will be null
             }
           }
         }
@@ -157,7 +157,6 @@ export function SessionProvider({
         setStatus(loadedSession ? 'authenticated' : 'unauthenticated');
         onSessionChange?.(loadedSession || null);
       } catch (error) {
-        console.error('Failed to initialize session:', error);
         setSession(null);
         setStatus('unauthenticated');
         onSessionChange?.(null);
@@ -224,7 +223,6 @@ export function SessionProvider({
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
-      console.error('Error during login:', errorMessage);
 
       // Return error response
       return {
@@ -267,7 +265,6 @@ export function SessionProvider({
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Logout failed';
-      console.error('Error during logout:', errorMessage);
 
       // Return error response but still clear session
       setSession(null);
@@ -306,7 +303,6 @@ export function SessionProvider({
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to update session';
-      console.error('Error updating session:', errorMessage);
 
       // Return error response
       return {

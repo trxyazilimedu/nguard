@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2025-01-15
+
+### Fixed
+
+- Removed unnecessary console.error and console.warn from authentication functions
+- Login, logout, and session update no longer log errors to console
+- Cleaner console output for production environments
+- Error responses contain full error details without console pollution
+
+## [0.2.1] - 2025-01-15
+
+### Fixed
+
+- Fixed JWT encoding error: "expiresIn option the payload already has an exp property"
+- JWTHandler.encode() now correctly handles payloads with pre-set exp property
+- Removed conflicting expiresIn option when payload already contains exp field
+
+### Added
+
+#### Response Type Exports
+- `LoginResponse` now exported from main API
+- `LogoutResponse` now exported from main API
+- `UpdateSessionResponse` now exported from main API
+- Enables type-safe response handling in user applications
+
+#### Documentation Enhancements
+- New `API-CLIENT.md` comprehensive client API reference (English & Turkish)
+- Updated QUICKSTART.md with response handling examples
+- Added best practices section for response handling
+- Added error handling patterns and examples
+- Complete hook documentation with TypeScript examples
+
+### Improved
+
+- Better response handling documentation with examples
+- Type-safe imports for response types
+- Clearer error handling patterns in client code
+
 ## [0.2.0] - 2024-01-15
 
 ### Added
