@@ -1,63 +1,16 @@
 # Session Validation
 
-Nguard provides comprehensive session validation capabilities for checking JWT validity on both client and server.
+Validate session and check if it's still valid.
 
-## Overview
+## Validation Endpoints
 
-Session validation helps you:
-- Check if a JWT token is valid and not expired
-- Get session information without requiring authentication
-- Monitor session expiration
-- Implement session refresh logic
-- Handle expired sessions gracefully
-
-## Validation Endpoint
+The CLI creates validation endpoints automatically. They're available at `/api/auth/validate`.
 
 ### GET /api/auth/validate
 
-Check current session validity from cookies.
+Check session from cookies.
 
-**Request:**
-```bash
-GET /api/auth/validate
-```
-
-**Response (Valid Session):**
-```json
-{
-  "valid": true,
-  "session": {
-    "id": "user-123",
-    "email": "user@example.com",
-    "role": "admin",
-    "permissions": ["users:read", "posts:create"],
-    "expires": 1704067200000
-  },
-  "expiresIn": 3600000
-}
-```
-
-**Response (Expired/Invalid):**
-```json
-{
-  "valid": false,
-  "error": "Session expired",
-  "expiresIn": -3600000
-}
-```
-
-### POST /api/auth/validate
-
-Validate a token sent in the request body.
-
-**Request:**
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIs..."
-}
-```
-
-**Response:**
+**Response (Valid):**
 ```json
 {
   "valid": true,
@@ -70,6 +23,35 @@ Validate a token sent in the request body.
 }
 ```
 
+**Response (Invalid):**
+```json
+{
+  "valid": false,
+  "error": "Session expired",
+  "expiresIn": -3600000
+}
+```
+
+### POST /api/auth/validate
+
+Validate a token from request body.
+
+**Request:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+**Response:**
+```json
+{
+  "valid": true,
+  "session": { /* ... */ },
+  "expiresIn": 3600000
+}
+```
+
 ### HEAD /api/auth/validate
 
 Quick validation without response body.
@@ -78,73 +60,27 @@ Quick validation without response body.
 - `200` - Session is valid
 - `401` - Session is invalid or expired
 
-## Implementation
-
-### Basic Endpoint
-
-```typescript
-// app/api/auth/validate/route.ts
-import { nguard } from '@/lib/auth';
-import { NextRequest, NextResponse } from 'next/server';
-
-export async function GET(request: NextRequest) {
-  try {
-    const cookieString = request.headers.get('cookie') || '';
-    const session = await nguard.validateSession(cookieString);
-
-    if (!session) {
-      return NextResponse.json({
-        valid: false,
-        error: 'No valid session',
-      });
-    }
-
-    const now = Date.now();
-    if (session.expires && session.expires < now) {
-      return NextResponse.json({
-        valid: false,
-        error: 'Session expired',
-        expiresIn: session.expires - now,
-      });
-    }
-
-    return NextResponse.json({
-      valid: true,
-      session,
-      expiresIn: session.expires - now,
-    });
-  } catch (error) {
-    return NextResponse.json(
-      { valid: false, error: 'Validation failed' },
-      { status: 500 }
-    );
-  }
-}
-```
-
-## Client-Side Usage
+## Client-Side Validation
 
 ### useValidateSession Hook
 
 ```typescript
 'use client';
 
-import { useValidateSession } from '@/hooks/useValidateSession';
+import { useValidateSession } from 'nguard/client';
 
-export function SessionStatus() {
-  const { validate, isValidating, isValid, validationResult } = useValidateSession();
+export function CheckSession() {
+  const { validate, isValid, validationResult } = useValidateSession();
 
   return (
     <div>
-      <button onClick={() => validate()} disabled={isValidating}>
-        {isValidating ? 'Checking...' : 'Check Session'}
-      </button>
+      <button onClick={() => validate()}>Check Session</button>
 
       {isValid && (
         <p>
           ✅ Session valid
           {validationResult?.expiresIn && (
-            <span> - Expires in {Math.round(validationResult.expiresIn / 1000)} seconds</span>
+            <span> - Expires in {Math.round(validationResult.expiresIn / 1000)}s</span>
           )}
         </p>
       )}
@@ -167,138 +103,116 @@ async function checkSession() {
   const data = await response.json();
 
   if (data.valid) {
-    console.log('Session is valid, expires in:', data.expiresIn);
+    console.log('Session is valid');
+    console.log('Expires in:', data.expiresIn, 'ms');
   } else {
     console.log('Session invalid:', data.error);
   }
 }
 ```
 
-## Middleware Usage
+## Auto-Refresh on App Load
 
-### Basic Validation Middleware
-
-```typescript
-import { validateSession } from '@/middleware/validate';
-import { compose } from 'nguard';
-
-export async function middleware(request: NextRequest) {
-  const session = getSessionFromCookie(request);
-
-  const middleware = compose(
-    validateSession,  // Check session validity
-  );
-
-  const response = await middleware(request, session);
-  return response || NextResponse.next();
-}
-```
-
-### With Auto-Refresh
-
-```typescript
-import { validateSession, autoRefresh } from '@/middleware/validate';
-
-export async function middleware(request: NextRequest) {
-  const session = getSessionFromCookie(request);
-
-  const middleware = compose(
-    validateSession,
-    autoRefresh(5 * 60 * 1000), // Refresh 5 mins before expiration
-  );
-
-  const response = await middleware(request, session);
-  return response || NextResponse.next();
-}
-```
-
-## Advanced Patterns
-
-### Session Status in Headers
-
-```typescript
-import { sessionStatus } from '@/middleware/validate';
-
-// Middleware adds headers:
-// X-Session-Status: valid | expiring | expired | none
-// X-Session-Expires-In: 3600 (seconds)
-// X-User-ID: user-123
-
-// Client reads headers
-const response = await fetch('/api/some-endpoint');
-const sessionStatus = response.headers.get('X-Session-Status');
-
-if (sessionStatus === 'expiring') {
-  // Show session expiring warning
-}
-```
-
-### Automatic Session Refresh
-
-```typescript
-'use client';
-
-import { useEffect } from 'react';
-
-export function SessionManager() {
-  useEffect(() => {
-    // Check session every minute
-    const interval = setInterval(async () => {
-      const response = await fetch('/api/auth/validate');
-      const data = await response.json();
-
-      if (!data.valid) {
-        // Redirect to login
-        window.location.href = '/login';
-        return;
-      }
-
-      // If expires within 5 minutes, refresh
-      if (data.expiresIn < 5 * 60 * 1000) {
-        await fetch('/api/auth/refresh', { method: 'POST' });
-      }
-    }, 60 * 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  return null;
-}
-```
-
-### Validation on Route Change
+Check session when app starts and redirect if invalid:
 
 ```typescript
 'use client';
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useValidateSession } from 'nguard/client';
 
 export function SessionGuard() {
   const router = useRouter();
+  const { validate, isValid } = useValidateSession();
 
   useEffect(() => {
-    async function validateBeforeNavigation() {
-      const response = await fetch('/api/auth/validate');
-      const data = await response.json();
+    validate();
+  }, [validate]);
 
-      if (!data.valid) {
-        router.push('/login');
-      }
+  useEffect(() => {
+    if (!isValid) {
+      router.push('/login');
     }
-
-    // Validate on route changes
-    window.addEventListener('popstate', validateBeforeNavigation);
-    return () => window.removeEventListener('popstate', validateBeforeNavigation);
-  }, [router]);
+  }, [isValid, router]);
 
   return null;
 }
 ```
 
-## Response Structure
+## Refresh Before Expiration
 
-### Validation Response
+Check session periodically and refresh if needed:
+
+```typescript
+'use client';
+
+import { useEffect } from 'react';
+import { useValidateSession } from 'nguard/client';
+
+export function SessionManager() {
+  const { validate, validationResult } = useValidateSession();
+
+  useEffect(() => {
+    // Check every minute
+    const interval = setInterval(async () => {
+      await validate();
+
+      if (!validationResult?.valid) {
+        // Redirect to login
+        window.location.href = '/login';
+        return;
+      }
+
+      // Refresh if expires within 5 minutes
+      if (validationResult.expiresIn < 5 * 60 * 1000) {
+        await fetch('/api/auth/refresh', { method: 'POST' });
+      }
+    }, 60 * 1000);
+
+    return () => clearInterval(interval);
+  }, [validate, validationResult]);
+
+  return null;
+}
+```
+
+## Server-Side Validation
+
+```typescript
+import { nguard } from '@/lib/auth';
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function GET(request: NextRequest) {
+  const cookieString = request.headers.get('cookie') || '';
+  const session = await nguard.validateSession(cookieString);
+
+  if (!session) {
+    return NextResponse.json(
+      { valid: false, error: 'No valid session' },
+      { status: 401 }
+    );
+  }
+
+  const now = Date.now();
+  const expiresIn = session.expires - now;
+
+  if (expiresIn < 0) {
+    return NextResponse.json(
+      { valid: false, error: 'Session expired', expiresIn },
+      { status: 401 }
+    );
+  }
+
+  return NextResponse.json({
+    valid: true,
+    session,
+    expiresIn,
+  });
+}
+```
+
+## Response Structure
 
 ```typescript
 interface ValidationResponse {
@@ -307,69 +221,64 @@ interface ValidationResponse {
     id?: string;
     email?: string;
     role?: string;
-    permissions?: string[];
-    expires?: number;
+    [key: string]: any;
   };
   error?: string;
-  expiresIn?: number; // Milliseconds until expiration
+  expiresIn?: number; // milliseconds
 }
 ```
 
-### Error Codes
+## Error Messages
 
 | Error | Meaning |
 |-------|---------|
-| `No session` | No JWT token found in cookies |
+| `No valid session` | No session cookie found |
 | `Invalid token` | Token is malformed or tampered |
-| `Session expired` | JWT expiration time has passed |
+| `Session expired` | Token expiration time has passed |
 | `Validation failed` | Server error during validation |
 
 ## Best Practices
 
-1. **Validate on App Load**
-   ```typescript
-   // Check session when app initializes
-   useEffect(() => {
-     validateSession();
-   }, []);
-   ```
+1. **Validate on app load** - Check session when app starts
+2. **Handle expiration gracefully** - Refresh before expiring
+3. **Use HEAD request** - For quick status checks
+4. **Monitor expiresIn** - Know when session will expire
+5. **Auto-refresh** - Refresh session before expiration
 
-2. **Handle Expiration Gracefully**
-   ```typescript
-   if (validationResult?.error === 'Session expired') {
-     // Refresh or redirect to login
-   }
-   ```
+## Example: Protected Route
 
-3. **Monitor Expiration**
-   ```typescript
-   const warningThreshold = 5 * 60 * 1000; // 5 minutes
-   if (data.expiresIn < warningThreshold) {
-     showExpirationWarning();
-   }
-   ```
+```typescript
+'use client';
 
-4. **Use HEAD for Quick Checks**
-   ```typescript
-   // Quick check without parsing response body
-   const response = await fetch('/api/auth/validate', { method: 'HEAD' });
-   const isValid = response.ok;
-   ```
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useValidateSession } from 'nguard/client';
 
-5. **Implement Refresh Logic**
-   ```typescript
-   if (!data.valid && data.error === 'Session expired') {
-     const refreshResponse = await fetch('/api/auth/refresh', {
-       method: 'POST',
-     });
-     if (refreshResponse.ok) {
-       // Try request again
-     }
-   }
-   ```
+export function ProtectedPage() {
+  const router = useRouter();
+  const { validate, isValid } = useValidateSession();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    validate().finally(() => setReady(true));
+  }, [validate]);
+
+  useEffect(() => {
+    if (ready && !isValid) {
+      router.push('/login');
+    }
+  }, [ready, isValid, router]);
+
+  if (!ready) return <div>Checking session...</div>;
+  if (!isValid) return <div>Redirecting...</div>;
+
+  return <div>Protected content here</div>;
+}
+```
 
 ## See Also
 
-- [Middleware Documentation](./MIDDLEWARE.md)
-- [API Reference](./API-SERVER.md)
-- [Examples](../examples/)
+- [Quick Start](./QUICKSTART.md) - Learn hooks
+- [CLI Setup](./CLI-SETUP.md) - Installation
+- [API Reference](./API-CLIENT.md) - All methods
+- [Middleware Guide](./MIDDLEWARE.md) - Add security

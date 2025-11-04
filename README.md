@@ -1,52 +1,40 @@
-<div align="center">
-  <img src="./docs/tr/logo.png" alt="Nguard Logo" width="200" />
-</div>
+<h1 align="center">
+  <img alt="Nguard" src="./docs/tr/logo.png" width="220" style="max-width: 100%;" />
+</h1>
 
-# Nguard
+<p align="center">
+  <strong>Next.js 16+ Session Management Library</strong><br/>
+  Zero-config authentication • JWT-based sessions • Works with any backend
+</p>
 
-A Next.js 16 compatible session management library with **callback-based authentication**. Flexible, type-safe, and works with any backend.
+<p align="center">
+  <a href="#installation">Installation</a> •
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#hooks">Hooks</a> •
+  <a href="#docs">Documentation</a>
+</p>
 
-## Features
+---
 
-- ✅ Server-side & Client-side Callbacks
-- ✅ JWT-based Authentication
-- ✅ TypeScript 100%
-- ✅ Secure Cookie Management
-- ✅ React Hooks (useAuth, useSession, useLogin, useLogout)
-- ✅ Works with any backend (Spring, Express, Node.js, etc.)
-- ✅ Next.js 16+ Support
-
-## Installation & Setup
-
-### Automatic Setup (Recommended)
+## Installation
 
 ```bash
-# 1. Install package
 npm install nguard
-
-# 2. Run interactive setup wizard
 npx nguard-setup
 ```
 
-The wizard will automatically create:
+That's it! The wizard will automatically create:
 - ✅ `lib/auth.ts` - Server authentication utilities
-- ✅ API routes (`/api/auth/login`, `/api/auth/logout`, etc.)
-- ✅ `proxy.ts` - Next.js 16 middleware configuration
-- ✅ `.env.local` - Environment variables template
-- ✅ TypeScript path aliases
+- ✅ API routes - `/api/auth/login`, `/api/auth/logout`, `/api/auth/validate`
+- ✅ `proxy.ts` - Next.js 16 middleware
+- ✅ `.env.local.example` - Configuration template
 
-> 📖 For detailed setup wizard guide, see [CLI-SETUP.md](./docs/en/CLI-SETUP.md)
+## Quick Start
 
-## Quick Example (After Setup)
+### 1. Wrap your app with SessionProvider
 
-### 1. Configure Environment
-```bash
-cp .env.local.example .env.local
-# Edit with your BACKEND_API_URL and generated NGUARD_SECRET
-```
-
-### 2. Client Setup (app/layout.tsx)
 ```typescript
+// app/layout.tsx
 'use client';
 
 import { SessionProvider } from 'nguard/client';
@@ -62,8 +50,10 @@ export default function RootLayout({ children }) {
 }
 ```
 
-### 3. Server Component
+### 2. Get session in Server Components
+
 ```typescript
+// app/dashboard/page.tsx
 import { auth } from '@/lib/auth';
 
 export default async function Dashboard() {
@@ -73,39 +63,32 @@ export default async function Dashboard() {
     return <div>Please log in</div>;
   }
 
-  return <div>Welcome {session.email}</div>;
+  return <div>Welcome, {session.email}</div>;
 }
 ```
 
-### 4. Client Component
+### 3. Use hooks in Client Components
+
 ```typescript
+// app/components/login.tsx
 'use client';
 
-import { useSession, useLogin, useLogout } from 'nguard/client';
+import { useLogin } from 'nguard/client';
 
 export function LoginForm() {
-  const { session } = useSession();
   const { login, isLoading } = useLogin();
-  const { logout } = useLogout();
 
-  if (session) {
-    return (
-      <div>
-        <p>Logged in as {session.email}</p>
-        <button onClick={logout}>Logout</button>
-      </div>
-    );
-  }
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+
     const response = await login({
       email: formData.get('email'),
       password: formData.get('password'),
     });
+
     if (response.session) {
-      // Success
+      console.log('Logged in!');
     }
   };
 
@@ -123,54 +106,170 @@ export function LoginForm() {
 
 ## Hooks
 
-- `useAuth()` - Get user, isAuthenticated, login, logout
-- `useSession()` - Get full session details
-- `useLogin()` / `useLogout()` - Specific functions only
-- `useSessionUpdate()` - Update session data
+### useSession()
+Get the current session
 
-## Callbacks
+```typescript
+const { session, loading } = useSession();
+```
 
-**Server-side (lib/auth.ts):**
-- `onServerLogin()` - User authentication
-- `onServerLogout()` - Cleanup on logout
-- `onValidateSession()` - Validate session
-- `onJWT()` - Transform JWT payload
-- `onSession()` - Transform session
+### useLogin()
+Login with credentials
 
-**Client-side (app/layout.tsx):**
-- `onLogin` - Send credentials to backend
-- `onLogout` - Handle logout
-- `onInitialize` - Load session on app start
+```typescript
+const { login, isLoading } = useLogin();
+const response = await login({ email, password });
+```
 
-## Documentation
+### useLogout()
+Logout the user
 
-### 🚀 Quick Start
-- **[CLI Setup Wizard](./docs/en/CLI-SETUP.md)** - Interactive setup guide (2 minutes)
+```typescript
+const { logout, isLoading } = useLogout();
+await logout();
+```
 
-### 📚 API Reference & Usage
-- **[API Reference](./docs/en/API-CLIENT.md)** - Hooks, methods, and response types
-- **[Middleware Guide](./docs/en/MIDDLEWARE.md)** - Built-in middleware system
-- **[Session Validation](./docs/en/VALIDATION.md)** - Validation patterns and examples
+### useSessionUpdate()
+Update session data
 
-### 🌐 Languages
-- **[Türkçe Dokümantasyon](./docs/tr/)** - Turkish documentation
-- **[English Documentation](./docs/en/)** - English documentation
+```typescript
+const { updateSession, isLoading } = useSessionUpdate();
+await updateSession(newSessionData);
+```
 
-## Security
+### useValidateSession()
+Check if session is valid
 
-- ✅ HS256 JWT signing
-- ✅ Secure cookie flags (HttpOnly, Secure, SameSite)
-- ✅ Cryptographic session IDs
-- ✅ HTTPS support
-- ✅ Server-side validation
+```typescript
+const { validate, isValid, validationResult } = useValidateSession();
+await validate();
+```
+
+## Server-Side
+
+### auth()
+Get session in Server Components
+
+```typescript
+import { auth } from '@/lib/auth';
+
+const session = await auth();
+```
+
+### createSession()
+Create a new session
+
+```typescript
+import { nguard } from '@/lib/auth';
+
+const { session, setCookieHeader } = await nguard.createSession({
+  id: 'user-123',
+  email: 'user@example.com',
+  role: 'admin',
+  expires: Date.now() + 24 * 60 * 60 * 1000,
+});
+```
+
+### clearSession()
+Clear the session
+
+```typescript
+const cookieHeader = nguard.clearSession();
+```
+
+### validateSession()
+Validate a session token
+
+```typescript
+const session = await nguard.validateSession(cookieString);
+```
+
+## Features
+
+- ✅ **Zero-config** - SessionProvider needs no callbacks
+- ✅ **TypeScript** - 100% type-safe
+- ✅ **JWT Sessions** - Secure, stateless authentication
+- ✅ **Server Components** - Works with async/await
+- ✅ **Client Hooks** - useSession, useLogin, useLogout
+- ✅ **Middleware** - Built-in role-based access control
+- ✅ **Session Validation** - Check session validity anytime
+- ✅ **Any Backend** - Works with Spring, Express, Django, etc.
+- ✅ **Next.js 16+** - Compatible with latest Next.js
+
+## Architecture
+
+```
+Next.js App
+    ↓
+SessionProvider (manages session state)
+    ↓
+useLogin/useLogout/useSession hooks
+    ↓
+API Routes (/api/auth/login, /api/auth/logout, etc)
+    ↓
+Your Backend (Spring, Express, Django, etc)
+    ↓
+JWT Token ← Session Data
+    ↓
+HTTP-only Cookie
+```
+
+## Docs
+
+- 📖 **[CLI Setup Guide](./docs/en/CLI-SETUP.md)** - Interactive setup wizard
+- 🚀 **[Quick Start](./docs/en/QUICKSTART.md)** - Learn hooks and usage
+- 📚 **[API Reference](./docs/en/API-CLIENT.md)** - All methods and hooks
+- ⚙️ **[Middleware Guide](./docs/en/MIDDLEWARE.md)** - Role-based access control
+- ✔️ **[Validation Guide](./docs/en/VALIDATION.md)** - Check session validity
+
+### Turkish Docs
+- 📖 **[CLI Kurulum Rehberi](./docs/tr/CLI-SETUP.md)**
+- 🚀 **[Hızlı Başlangıç](./docs/tr/QUICKSTART.md)**
+
+## Example Response
+
+Your backend determines the response structure:
+
+```typescript
+// Login endpoint returns
+{
+  session: {
+    id: 'user-123',
+    email: 'user@example.com',
+    role: 'admin',
+    permissions: ['read', 'write']
+  }
+}
+```
 
 ## Environment Variables
 
 ```env
-NGUARD_SECRET=your-secret-min-32-chars
-# Generate: openssl rand -base64 32
+NGUARD_SECRET=your-32-character-secret
+BACKEND_API_URL=http://localhost:8080/api
+NODE_ENV=development
 ```
+
+Generate a secret:
+```bash
+openssl rand -base64 32
+```
+
+## Security
+
+- ✅ HTTP-only cookies
+- ✅ CSRF protection
+- ✅ Secure cookie flags
+- ✅ JWT validation
+- ✅ Session expiration
 
 ## License
 
 MIT
+
+---
+
+<p align="center">
+  <strong>Ready to get started?</strong><br/>
+  <code>npm install nguard && npx nguard-setup</code>
+</p>

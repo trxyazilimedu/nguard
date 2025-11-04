@@ -1,91 +1,54 @@
-# Nguard CLI Setup Guide
+# CLI Setup Guide
 
-The Nguard CLI Setup Wizard automates the integration of Nguard authentication into your Next.js 16+ project with a simple interactive wizard.
+The interactive CLI setup wizard automatically configures Nguard in your Next.js 16+ project.
 
-## Quick Start
+## Installation
 
 ```bash
-# Install Nguard
 npm install nguard
-
-# Run the setup wizard
 npx nguard-setup
 ```
 
-That's it! The wizard will guide you through the setup and create all necessary files.
+## What the Wizard Does
 
-## What Gets Generated
+The CLI asks a few questions and creates:
 
-### 1. **lib/auth.ts** (or lib/auth.js)
+1. **lib/auth.ts** - Server-side authentication utilities
+2. **API routes** - `/api/auth/login`, `/api/auth/logout`, `/api/auth/validate`, `/api/auth/refresh`
+3. **proxy.ts** - Next.js 16 middleware configuration
+4. **.env.local.example** - Environment variables template
+5. **tsconfig.json updates** - Path aliases (`@/*`)
 
-Server-side authentication utilities with:
-- `nguard` - Initialized server instance
-- `auth()` - Get current session in Server Components
-- Helper functions: `createSession()`, `clearSession()`, `updateSession()`, `validateSession()`
-
-### 2. **API Routes** - `app/api/auth/[route]/route.ts`
-
-Automatically created endpoints (you choose which ones):
-
-- **POST /api/auth/login** - Create session
-- **POST /api/auth/logout** - Clear session
-- **GET /api/auth/validate** - Check session validity
-- **POST /api/auth/refresh** - Extend session
-
-### 3. **proxy.ts** (Next.js 16+)
-
-Replaces `middleware.ts`. Set up your middleware:
-- Authentication requirements
-- Role-based access control
-- Request logging
-- CORS headers
-- Session validation
-
-### 4. **.env.local.example**
-
-Environment template:
-```env
-NGUARD_SECRET=your-32-char-secret
-BACKEND_API_URL=http://localhost:8080/api
-NODE_ENV=development
-```
-
-### 5. **tsconfig.json** Updates
-
-Path aliases for cleaner imports:
-```typescript
-// Before: import { auth } from '../../../lib/auth'
-// After:  import { auth } from '@/lib/auth'
-```
-
-## Interactive Setup Process
+## Interactive Setup Flow
 
 ### Step 1: Confirmation
 
+The wizard displays what it will create and asks for your approval:
+
 ```
-⚠️ DISCLAIMER:
-This wizard will create/modify files in your project:
+⚠️ This wizard will create/modify:
 - lib/auth.ts
 - app/api/auth/ routes
 - proxy.ts
 - .env.local.example
 
-Do you want to continue? (y/n):
-Do you take full responsibility? (y/n):
+Continue? (y/n):
+Accept responsibility? (y/n):
 ```
 
 ### Step 2: Project Configuration
 
 ```
-Is this a TypeScript project? (y/n):
-App directory path (default: app):
+TypeScript project? (y/n):
+App directory (default: app):
 Cookie name (default: nguard-session):
 Environment (default: development):
 ```
 
-### Step 3: Select Auth Routes
+### Step 3: Select Routes
 
-Choose which routes to create:
+Choose which authentication endpoints to create:
+
 ```
 Create /api/auth/login? (recommended) (y/n):
 Create /api/auth/logout? (recommended) (y/n):
@@ -101,7 +64,15 @@ Create /api/auth/refresh? (y/n):
 cp .env.local.example .env.local
 ```
 
-Generate a JWT secret:
+Edit `.env.local`:
+
+```env
+NGUARD_SECRET=your-32-character-secret
+BACKEND_API_URL=http://localhost:8080/api
+NODE_ENV=development
+```
+
+Generate a secret:
 ```bash
 openssl rand -base64 32
 ```
@@ -126,17 +97,15 @@ export default function RootLayout({ children }) {
 }
 ```
 
-### 3. Use in Your Components
+### 3. Start Using
 
 **Server Component:**
 ```typescript
 import { auth } from '@/lib/auth';
 
-export default async function Dashboard() {
+export default async function Page() {
   const session = await auth();
-  if (!session) return <div>Not logged in</div>;
-
-  return <div>Welcome {session.email}</div>;
+  return <div>Hello {session?.email}</div>;
 }
 ```
 
@@ -144,41 +113,19 @@ export default async function Dashboard() {
 ```typescript
 'use client';
 
-import { useSession, useLogin, useLogout } from 'nguard/client';
+import { useSession, useLogin } from 'nguard/client';
 
-export default function Profile() {
+export function MyComponent() {
   const { session } = useSession();
-  const { login, isLoading } = useLogin();
-  const { logout } = useLogout();
+  const { login } = useLogin();
 
-  if (!session) {
-    return (
-      <form onSubmit={async (e) => {
-        e.preventDefault();
-        await login({
-          email: 'user@example.com',
-          password: 'password',
-        });
-      }}>
-        <input type="email" placeholder="Email" required />
-        <input type="password" placeholder="Password" required />
-        <button disabled={isLoading}>Login</button>
-      </form>
-    );
-  }
-
-  return (
-    <div>
-      <p>Logged in as {session.email}</p>
-      <button onClick={logout}>Logout</button>
-    </div>
-  );
+  return <div>{session?.email}</div>;
 }
 ```
 
-### 4. Customize API Routes
+## Customizing Routes
 
-Edit `app/api/auth/login/route.ts` to add your backend logic:
+Edit the generated routes to add your backend logic:
 
 ```typescript
 // app/api/auth/login/route.ts
@@ -192,21 +139,19 @@ export async function POST(request: NextRequest) {
     const { email, password } = await request.json();
 
     // Call your backend
-    const backendResponse = await fetch(`${BACKEND_API_URL}/auth/login`, {
+    const res = await fetch(`${BACKEND_API_URL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
 
-    if (!backendResponse.ok) {
-      throw new Error('Authentication failed');
-    }
+    if (!res.ok) throw new Error('Auth failed');
 
-    const backendData = await backendResponse.json();
+    const data = await res.json();
 
     // Create session with backend data
     const { session, setCookieHeader } = await nguard.createSession({
-      ...backendData,
+      ...data,
       expires: Date.now() + 24 * 60 * 60 * 1000,
     });
 
@@ -222,7 +167,7 @@ export async function POST(request: NextRequest) {
 }
 ```
 
-### 5. Add Middleware
+## Adding Middleware
 
 Edit `proxy.ts` to add security middleware:
 
@@ -231,73 +176,30 @@ import { compose, requireAuth, logger } from 'nguard';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function proxy(request: NextRequest) {
-  const session = null; // Extract from cookies if needed
-
   const middleware = compose(
-    logger({
-      onLog: (data) => console.log('[Request]', data.method, data.path),
-    }),
-    // Add requireAuth for protected routes:
-    // requireAuth,
+    logger({ onLog: (data) => console.log(data) }),
+    // requireAuth, // Uncomment to protect routes
   );
 
-  const response = await middleware(request, session);
+  const response = await middleware(request, null);
   return response || NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico|public).*)'],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };
-```
-
-## Customization Options
-
-### Change Cookie Name
-
-```bash
-# Edit .env.local
-NGUARD_COOKIE_NAME=my-session
-```
-
-### Set TypeScript Path Aliases
-
-Already done by CLI, but manually add to `tsconfig.json` if needed:
-
-```json
-{
-  "compilerOptions": {
-    "paths": {
-      "@/*": ["./*"]
-    }
-  }
-}
-```
-
-### Custom Session Data
-
-The session accepts any data structure:
-
-```typescript
-await nguard.createSession({
-  id: 'user-123',
-  email: 'user@example.com',
-  role: 'admin',
-  permissions: ['read', 'write'],
-  customField: 'any value',
-  expires: Date.now() + 24 * 60 * 60 * 1000,
-});
 ```
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| TypeScript errors | Verify `tsconfig.json` has `@/*` path alias, run `npm run build` |
-| Session not persisting | Check `.env.local` has `NGUARD_SECRET`, verify backend is running |
+| TypeScript errors | Check `tsconfig.json` has `@/*` path alias |
 | Routes not found | Verify files in `app/api/auth/[route]/route.ts` |
-| Import errors | Ensure `@/*` path alias in `tsconfig.json`, restart dev server |
+| Session not persisting | Check `.env.local` has `NGUARD_SECRET` set |
+| Import errors | Ensure `@/*` alias exists, restart dev server |
 
-## File Structure After Setup
+## File Structure
 
 ```
 your-project/
@@ -307,20 +209,18 @@ your-project/
 │   │   ├── logout/route.ts
 │   │   ├── validate/route.ts
 │   │   └── refresh/route.ts
-│   ├── layout.tsx (with SessionProvider)
-│   └── page.tsx
+│   └── layout.tsx (SessionProvider)
 ├── lib/
 │   └── auth.ts
 ├── proxy.ts
 ├── .env.local
 ├── .env.local.example
-├── tsconfig.json (updated)
-└── package.json
+└── tsconfig.json (updated)
 ```
 
 ## See Also
 
-- [API Reference](./API-CLIENT.md) - All hooks and methods
-- [Middleware Guide](./MIDDLEWARE.md) - Middleware system
-- [Session Validation](./VALIDATION.md) - Validation patterns
-- [SETUP-REFERENCE](../SETUP-REFERENCE.md) - Quick reference
+- [Quick Start](./QUICKSTART.md) - Learn hooks
+- [API Reference](./API-CLIENT.md) - All methods
+- [Middleware Guide](./MIDDLEWARE.md) - Middleware patterns
+- [Validation Guide](./VALIDATION.md) - Check session validity

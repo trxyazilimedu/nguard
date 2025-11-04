@@ -1,173 +1,149 @@
-# Middleware System
+# Middleware Guide
 
-Nguard provides a flexible, composable middleware system for Next.js that works seamlessly with `next-intl` and other middleware libraries.
+Add authentication and security middleware to your Next.js 16 app using `proxy.ts`.
 
-## Overview
+## Basics
 
-The middleware system is designed with these principles:
-
-- **Flexible**: Use individual middleware or compose them
-- **Composable**: Chain middleware in any order
-- **Compatible**: Works with next-intl, i18n, and other middleware
-- **Typed**: Full TypeScript support
-- **Non-intrusive**: Doesn't interfere with other middleware
-
-## Basic Usage
-
-### Simple Authentication Middleware
+All middleware work with the `compose()` function:
 
 ```typescript
-// middleware.ts
-import { requireAuth } from 'nguard';
+import { compose, requireAuth, logger } from 'nguard';
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function middleware(request: NextRequest) {
-  const session = null; // Get from cookies or your session store
-  const authMiddleware = requireAuth();
+export async function proxy(request: NextRequest) {
+  const middleware = compose(
+    logger(),
+    requireAuth,
+  );
 
-  const response = authMiddleware(request, session);
-
+  const response = await middleware(request, null);
   return response || NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)',
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };
 ```
 
-### Role-Based Access Control
+## Built-in Middleware
+
+### requireAuth
+
+Require valid session. Redirects to `/login` if not authenticated.
 
 ```typescript
-import { requireRole } from 'nguard';
-
-export async function middleware(request: NextRequest) {
-  const session = getSessionFromCookie(request);
-
-  if (request.nextUrl.pathname.startsWith('/admin')) {
-    const adminMiddleware = requireRole('admin');
-    const response = adminMiddleware(request, session);
-
-    if (response) return response;
-  }
-
-  return NextResponse.next();
+export async function proxy(request: NextRequest) {
+  const middleware = compose(requireAuth);
+  const response = await middleware(request, null);
+  return response || NextResponse.next();
 }
 ```
 
-## Available Middleware
+### requireRole
 
-### requireAuth()
-
-Requires valid session to access the route.
+Require specific role. Returns 403 if role doesn't match.
 
 ```typescript
-const middleware = requireAuth();
-// Returns: Redirects to /login if no session
-```
-
-### requireRole(role)
-
-Requires user to have specific role.
-
-```typescript
-const middleware = requireRole('admin');
-// or multiple roles
-const middleware = requireRole(['admin', 'moderator']);
-// Returns: 403 if user doesn't have role
-```
-
-### requirePermission(permission)
-
-Requires user to have specific permission(s).
-
-```typescript
-const middleware = requirePermission('users:read');
-// or multiple permissions
-const middleware = requirePermission(['posts:create', 'posts:edit']);
-// Returns: 403 if user doesn't have permission
-```
-
-**Note**: Permissions must be stored in session as:
-```typescript
-{
-  permissions: ['users:read', 'posts:create'],
-  role: 'editor'
+export async function proxy(request: NextRequest) {
+  const middleware = compose(
+    requireRole(['admin', 'moderator']),
+  );
+  const response = await middleware(request, session);
+  return response || NextResponse.next();
 }
 ```
 
-### rateLimit(config)
+### requirePermission
 
-Rate limiting per user or IP.
+Require specific permission. Returns 403 if permission doesn't match.
 
 ```typescript
-import { rateLimit } from 'nguard';
-
-const middleware = rateLimit({
-  maxRequests: 100,
-  windowMs: 60 * 1000, // 1 minute
-});
-// Returns: 429 (Too Many Requests) when exceeded
+export async function proxy(request: NextRequest) {
+  const middleware = compose(
+    requirePermission(['posts:create', 'posts:edit']),
+  );
+  const response = await middleware(request, session);
+  return response || NextResponse.next();
+}
 ```
 
-### logger(config)
+### logger
 
-Log requests with optional custom handler.
+Log all requests.
 
 ```typescript
-import { logger } from 'nguard';
-
-const middleware = logger({
-  onLog: (data) => {
-    console.log(`${data.method} ${data.pathname}`);
-    // Send to analytics, sentry, etc.
-  },
-});
+export async function proxy(request: NextRequest) {
+  const middleware = compose(
+    logger({
+      onLog: (data) => console.log(`[${data.method}] ${data.path}`),
+    }),
+  );
+  const response = await middleware(request, null);
+  return response || NextResponse.next();
+}
 ```
 
-### cors(config)
+### cors
 
-Handle CORS headers.
+Add CORS headers.
 
 ```typescript
-import { cors } from 'nguard';
-
-const middleware = cors({
-  allowedOrigins: ['http://localhost:3000', 'https://example.com'],
-  allowedMethods: ['GET', 'POST'],
-  credentials: true,
-  maxAge: 3600,
-});
+export async function proxy(request: NextRequest) {
+  const middleware = compose(
+    cors({
+      origin: ['http://localhost:3000'],
+      credentials: true,
+    }),
+  );
+  const response = await middleware(request, null);
+  return response || NextResponse.next();
+}
 ```
 
-### injectHeaders(headers)
+### rateLimit
 
-Inject custom headers into response.
+Rate limit requests per IP or user.
 
 ```typescript
-import { injectHeaders } from 'nguard';
+export async function proxy(request: NextRequest) {
+  const middleware = compose(
+    rateLimit({
+      maxRequests: 100,
+      windowMs: 60 * 1000, // 1 minute
+    }),
+  );
+  const response = await middleware(request, session);
+  return response || NextResponse.next();
+}
+```
 
-const middleware = injectHeaders({
-  'X-Custom-Header': 'value',
-  'X-Security-Policy': 'strict',
-});
+### injectHeaders
+
+Inject custom headers.
+
+```typescript
+export async function proxy(request: NextRequest) {
+  const middleware = compose(
+    injectHeaders({
+      'X-Custom-Header': 'value',
+    }),
+  );
+  const response = await middleware(request, null);
+  return response || NextResponse.next();
+}
 ```
 
 ## Composing Middleware
 
-### compose()
-
-Combine multiple middleware into one.
+Combine multiple middleware:
 
 ```typescript
-import { compose, requireAuth, logger, rateLimit } from 'nguard';
-
-export async function middleware(request: NextRequest) {
-  const session = getSession(request);
-
+export async function proxy(request: NextRequest) {
   const middleware = compose(
     logger(),
-    rateLimit({ maxRequests: 100, windowMs: 60000 }),
-    requireAuth()
+    cors(),
+    requireAuth,
+    requireRole(['admin']),
   );
 
   const response = await middleware(request, session);
@@ -175,116 +151,43 @@ export async function middleware(request: NextRequest) {
 }
 ```
 
-### when()
+## Conditional Middleware
 
-Conditionally execute middleware.
-
-```typescript
-import { when, requireAuth } from 'nguard';
-
-const middleware = when(
-  (req) => req.nextUrl.pathname.startsWith('/api'),
-  requireAuth()
-);
-```
-
-### onPath()
-
-Execute middleware only for specific paths.
+Apply middleware conditionally:
 
 ```typescript
-import { onPath, requireRole } from 'nguard';
+import { compose, when, requireAuth } from 'nguard';
 
-const middleware = onPath(
-  /^\/admin/,  // RegExp
-  requireRole('admin')
-);
-
-// or with string
-const middleware = onPath('/dashboard', requireAuth());
-
-// or with function
-const middleware = onPath(
-  (pathname) => pathname.startsWith('/api/protected'),
-  requireAuth()
-);
-```
-
-## Integration with next-intl
-
-Nguard middleware is designed to work seamlessly with `next-intl`. Here's the proper setup:
-
-```typescript
-// middleware.ts
-import { createIntlMiddleware } from 'next-intl/middleware';
-import { compose, requireAuth, requireRole } from 'nguard';
-import { NextRequest, NextResponse } from 'next/server';
-import { Session } from 'nguard';
-
-const locales = ['en', 'tr', 'es'];
-const intlMiddleware = createIntlMiddleware({
-  locales,
-  defaultLocale: 'en',
-});
-
-export async function middleware(request: NextRequest) {
-  // Step 1: Apply i18n first
-  const intlResponse = intlMiddleware(request);
-
-  // Step 2: Get session
-  const sessionCookie = request.cookies.get('nguard-session')?.value;
-  let session: Session | null = null;
-  if (sessionCookie) {
-    try {
-      session = JSON.parse(sessionCookie);
-    } catch {}
-  }
-
-  // Step 3: Apply Nguard middleware
-  const authMiddleware = compose(
-    requireAuth(),
-    requireRole('user')
+export async function proxy(request: NextRequest) {
+  const middleware = compose(
+    // Only require auth for /admin paths
+    when(
+      request.nextUrl.pathname.startsWith('/admin'),
+      requireAuth,
+    ),
   );
 
-  const authResponse = await authMiddleware(request, session);
-
-  if (authResponse) {
-    // Merge headers from both responses
-    authResponse.headers.forEach((value, key) => {
-      if (!intlResponse.headers.has(key)) {
-        intlResponse.headers.set(key, value);
-      }
-    });
-    return authResponse;
-  }
-
-  return intlResponse;
+  const response = await middleware(request, session);
+  return response || NextResponse.next();
 }
-
-export const config = {
-  matcher: ['/((?!api|_next|favicon.ico).*),'],
-};
 ```
 
-## Error Handling
+## Path-based Middleware
 
-### withErrorHandling()
-
-Wrap middleware with error handling.
+Apply middleware to specific paths:
 
 ```typescript
-import { withErrorHandling, requireAuth } from 'nguard';
+import { compose, onPath, requireAuth } from 'nguard';
 
-const safeAuth = withErrorHandling(
-  requireAuth(),
-  (error) => {
-    console.error('Auth error:', error);
-    return NextResponse.json(
-      { error: 'Authentication failed' },
-      { status: 500 }
-    );
-  }
-);
+export async function proxy(request: NextRequest) {
+  const middleware = compose(
+    onPath(/^\/admin/, requireAuth),
+    onPath(/^\/api/, logger()),
+  );
+
+  const response = await middleware(request, session);
+  return response || NextResponse.next();
+}
 ```
 
 ## Custom Middleware
@@ -292,136 +195,89 @@ const safeAuth = withErrorHandling(
 Create your own middleware:
 
 ```typescript
-import { NguardMiddleware } from 'nguard';
-import { NextRequest, NextResponse } from 'next/server';
-import { Session } from 'nguard';
-
-const customMiddleware: NguardMiddleware = (request, session) => {
-  // Your logic here
-
-  if (someCondition) {
-    return NextResponse.json(
-      { error: 'Forbidden' },
-      { status: 403 }
-    );
+const customAuth = (req, session) => {
+  if (req.nextUrl.pathname.startsWith('/protected')) {
+    if (!session) {
+      return new NextResponse('Unauthorized', { status: 401 });
+    }
   }
-
-  // Return nothing to continue
+  return null;
 };
 
-export async function middleware(request: NextRequest) {
-  const session = getSession(request);
-  const response = customMiddleware(request, session);
-
+export async function proxy(request: NextRequest) {
+  const middleware = compose(customAuth);
+  const response = await middleware(request, session);
   return response || NextResponse.next();
 }
 ```
 
-## Session Structure
+## Error Handling
 
-Your session object can have any structure. Here are common patterns:
+Wrap middleware with error handling:
 
 ```typescript
-// Basic session
-{
-  id: 'user-123',
-  email: 'user@example.com',
-  name: 'John Doe',
-  expires: 1234567890000
-}
+import { compose, withErrorHandling, requireAuth } from 'nguard';
 
-// With role
-{
-  id: 'user-123',
-  email: 'user@example.com',
-  role: 'admin',
-  expires: 1234567890000
-}
+export async function proxy(request: NextRequest) {
+  const middleware = compose(
+    withErrorHandling(requireAuth, (error) => {
+      console.error('Auth error:', error);
+      return new NextResponse('Auth failed', { status: 401 });
+    }),
+  );
 
-// With permissions
-{
-  id: 'user-123',
-  email: 'user@example.com',
-  permissions: ['users:read', 'posts:create'],
-  expires: 1234567890000
-}
-
-// Complex structure
-{
-  id: 'user-123',
-  email: 'user@example.com',
-  profile: {
-    name: 'John Doe',
-    avatar: 'https://...',
-  },
-  role: 'admin',
-  permissions: ['users:read', 'posts:create'],
-  settings: {
-    theme: 'dark',
-    language: 'en',
-  },
-  expires: 1234567890000
+  const response = await middleware(request, session);
+  return response || NextResponse.next();
 }
 ```
 
-## Best Practices
-
-1. **Apply middleware in order**: Apply i18n first, then authentication
-2. **Get session early**: Extract session from cookies at the start
-3. **Use compose for clarity**: Group related middleware
-4. **Handle errors**: Use `withErrorHandling()` for important middleware
-5. **Test integration**: Test with other middleware libraries
-6. **Performance**: Cache session parsing if needed
-
-## Performance Tips
-
-- Cache session parsing: Parse JWT once and reuse
-- Use RegExp for path matching instead of multiple string comparisons
-- Apply rate limiting selectively to API routes only
-- Lazy-load heavy middleware (e.g., logger)
-
-## Troubleshooting
-
-### Middleware not executing
-
-Make sure your `config.matcher` includes the paths you want to protect.
+## Full Example
 
 ```typescript
+import { compose, logger, requireAuth, requireRole, cors } from 'nguard';
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function proxy(request: NextRequest) {
+  // Extract session from cookies if needed
+  const session = null; // You would parse this from cookies
+
+  const middleware = compose(
+    // Log all requests
+    logger({
+      onLog: (data) => console.log(`[${data.method}] ${data.path}`),
+    }),
+
+    // Add CORS headers
+    cors({
+      origin: ['http://localhost:3000'],
+      credentials: true,
+    }),
+
+    // Require auth for /dashboard
+    when(
+      request.nextUrl.pathname.startsWith('/dashboard'),
+      requireAuth,
+    ),
+
+    // Require admin role for /admin
+    when(
+      request.nextUrl.pathname.startsWith('/admin'),
+      requireRole(['admin']),
+    ),
+  );
+
+  const response = await middleware(request, session);
+  return response || NextResponse.next();
+}
+
 export const config = {
-  matcher: [
-    // Include all except these
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };
-```
-
-### Headers not merging properly
-
-When combining with other middleware, merge headers explicitly:
-
-```typescript
-if (customResponse) {
-  otherResponse.headers.forEach((value, key) => {
-    if (!customResponse.headers.has(key)) {
-      customResponse.headers.set(key, value);
-    }
-  });
-  return customResponse;
-}
-```
-
-### Session not found
-
-Ensure you're reading session from the correct cookie:
-
-```typescript
-const sessionCookie = request.cookies.get('nguard-session')?.value;
-// or your custom cookie name
-const sessionCookie = request.cookies.get('YOUR_COOKIE_NAME')?.value;
 ```
 
 ## See Also
 
-- [Middleware Examples](./examples/middleware-basic.ts)
-- [next-intl Integration](./examples/middleware-with-intl.ts)
-- [Security Best Practices](./BEST-PRACTICES.md)
+- [Quick Start](./QUICKSTART.md) - Learn hooks
+- [CLI Setup](./CLI-SETUP.md) - Installation
+- [API Reference](./API-CLIENT.md) - All methods
+- [Validation Guide](./VALIDATION.md) - Check session

@@ -1,12 +1,10 @@
-# Nguard Quick Start
+# Quick Start
 
-After running the CLI setup wizard, here's how to use Nguard hooks and authentication in your application.
+After running `npx nguard-setup`, here's how to use Nguard.
 
-> **Setup:** Already done by `npx nguard-setup`. For detailed setup guide, see [CLI-SETUP.md](./CLI-SETUP.md)
+## Setup SessionProvider
 
-## Session Provider (app/layout.tsx)
-
-Wrap your app with SessionProvider (zero-config, no callbacks needed):
+Wrap your app with SessionProvider in `app/layout.tsx`:
 
 ```typescript
 'use client';
@@ -24,30 +22,29 @@ export default function RootLayout({ children }) {
 }
 ```
 
-The SessionProvider automatically:
-- Calls `POST /api/auth/login` for login
-- Calls `POST /api/auth/logout` for logout
-- Manages session state
-
-## Getting Session
-
-### In Server Components
+## Get Session in Server Components
 
 ```typescript
+// app/dashboard/page.tsx
 import { auth } from '@/lib/auth';
 
 export default async function Dashboard() {
   const session = await auth();
 
   if (!session) {
-    return <div>Please log in first</div>;
+    return <div>Please log in</div>;
   }
 
-  return <div>Welcome, {session.email}</div>;
+  return (
+    <div>
+      <h1>Hello {session.email}</h1>
+      <p>Role: {session.role}</p>
+    </div>
+  );
 }
 ```
 
-### In Client Components
+## Get Session in Client Components
 
 ```typescript
 'use client';
@@ -64,9 +61,7 @@ export function Profile() {
 }
 ```
 
-## Login & Logout
-
-### useLogin Hook
+## Login
 
 ```typescript
 'use client';
@@ -76,38 +71,35 @@ import { useLogin } from 'nguard/client';
 export function LoginForm() {
   const { login, isLoading } = useLogin();
 
-  async function handleLogin(email: string, password: string) {
-    const response = await login({ email, password });
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const response = await login({
+      email: formData.get('email'),
+      password: formData.get('password'),
+    });
 
     if (response.session) {
-      // Successfully logged in
-      console.log('Logged in as:', response.session.email);
+      console.log('Logged in!');
     } else if (response.error) {
-      // Login failed
-      console.error('Login error:', response.error);
+      console.error('Error:', response.error);
     }
   }
 
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      const formData = new FormData(e.currentTarget);
-      handleLogin(
-        formData.get('email') as string,
-        formData.get('password') as string
-      );
-    }}>
+    <form onSubmit={handleSubmit}>
       <input type="email" name="email" placeholder="Email" required />
       <input type="password" name="password" placeholder="Password" required />
       <button disabled={isLoading}>
-        {isLoading ? 'Logging in...' : 'Login'}
+        {isLoading ? 'Loading...' : 'Login'}
       </button>
     </form>
   );
 }
 ```
 
-### useLogout Hook
+## Logout
 
 ```typescript
 'use client';
@@ -119,7 +111,7 @@ export function LogoutButton() {
 
   return (
     <button onClick={logout} disabled={isLoading}>
-      {isLoading ? 'Logging out...' : 'Logout'}
+      {isLoading ? 'Loading...' : 'Logout'}
     </button>
   );
 }
@@ -127,18 +119,16 @@ export function LogoutButton() {
 
 ## Update Session
 
-The `useSessionUpdate` hook allows updating session data without re-login:
-
 ```typescript
 'use client';
 
 import { useSessionUpdate } from 'nguard/client';
 
-export function UpdateProfile() {
+export function UpdateRole() {
   const { updateSession, isLoading } = useSessionUpdate();
 
-  async function handleUpdateRole() {
-    // Call your API that updates session
+  async function handleUpdate() {
+    // Get new session data from your API
     const response = await fetch('/api/user/update-role', {
       method: 'POST',
       body: JSON.stringify({ role: 'admin' }),
@@ -146,14 +136,12 @@ export function UpdateProfile() {
 
     if (response.ok) {
       const data = await response.json();
-
-      // Update the session with new data
       await updateSession(data.session);
     }
   }
 
   return (
-    <button onClick={handleUpdateRole} disabled={isLoading}>
+    <button onClick={handleUpdate} disabled={isLoading}>
       Update Role
     </button>
   );
@@ -162,15 +150,13 @@ export function UpdateProfile() {
 
 ## Validate Session
 
-Check if the current session is valid:
-
 ```typescript
 'use client';
 
 import { useValidateSession } from 'nguard/client';
 
 export function CheckSession() {
-  const { validate, validationResult, isValid } = useValidateSession();
+  const { validate, isValid, validationResult } = useValidateSession();
 
   return (
     <div>
@@ -195,7 +181,7 @@ export function CheckSession() {
 
 ## Error Handling
 
-All login/logout methods return responses instead of throwing errors:
+All login/logout methods return responses with error info:
 
 ```typescript
 'use client';
@@ -203,144 +189,80 @@ All login/logout methods return responses instead of throwing errors:
 import { useState } from 'react';
 import { useLogin } from 'nguard/client';
 
-export function SmartLoginForm() {
+export function SafeLoginForm() {
   const { login, isLoading } = useLogin();
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
-  async function handleLogin(email: string, password: string) {
-    setMessage(null);
-    setError(null);
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setMessage('');
+    setError('');
+
+    const fd = new FormData(e.currentTarget);
 
     try {
-      const response = await login({ email, password });
+      const response = await login({
+        email: fd.get('email'),
+        password: fd.get('password'),
+      });
 
-      // Check your API response structure
       if (response.session) {
         setMessage('Login successful!');
       } else if (response.error) {
         setError(response.error);
       }
     } catch (err) {
-      // Network or fetch errors
-      setError('Network error: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      setError('Network error: ' + err.message);
     }
   }
 
   return (
-    <form onSubmit={(e) => {
-      e.preventDefault();
-      const fd = new FormData(e.currentTarget);
-      handleLogin(fd.get('email') as string, fd.get('password') as string);
-    }}>
-      {message && <div className="success">{message}</div>}
-      {error && <div className="error">{error}</div>}
+    <form onSubmit={handleSubmit}>
+      {message && <div style={{ color: 'green' }}>{message}</div>}
+      {error && <div style={{ color: 'red' }}>{error}</div>}
 
       <input type="email" name="email" placeholder="Email" required />
       <input type="password" name="password" placeholder="Password" required />
-      <button disabled={isLoading}>{isLoading ? 'Loading...' : 'Login'}</button>
+      <button disabled={isLoading}>
+        {isLoading ? 'Loading...' : 'Login'}
+      </button>
     </form>
   );
 }
 ```
 
-## useAuth Hook (Legacy Alternative)
+## All Hooks
 
-If you prefer the `useAuth` hook that returns more properties:
+| Hook | Usage |
+|------|-------|
+| `useSession()` | Get current session |
+| `useLogin()` | Login with credentials |
+| `useLogout()` | Logout user |
+| `useSessionUpdate()` | Update session data |
+| `useValidateSession()` | Check if session is valid |
+| `useAuth()` | Alternative hook with more properties |
 
-```typescript
-'use client';
+## Server-Side Functions
 
-import { useAuth } from 'nguard/client';
-
-export function AuthComponent() {
-  const { session, isAuthenticated, login, logout, isLoading } = useAuth();
-
-  if (!isAuthenticated) {
-    return <LoginForm onLogin={login} />;
-  }
-
-  return (
-    <div>
-      <p>Logged in as: {session?.email}</p>
-      <button onClick={logout} disabled={isLoading}>Logout</button>
-    </div>
-  );
-}
-```
-
-## Custom Session Callbacks (Optional)
-
-If you need custom behavior, you can pass callbacks to SessionProvider:
-
-```typescript
-'use client';
-
-import { SessionProvider, type LoginCallback } from 'nguard/client';
-
-const handleLogin: LoginCallback = async (credentials) => {
-  // Use custom endpoint
-  const res = await fetch('/custom/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(credentials),
-  });
-
-  return await res.json();
-};
-
-export default function RootLayout({ children }) {
-  return (
-    <html>
-      <body>
-        <SessionProvider onLogin={handleLogin}>
-          {children}
-        </SessionProvider>
-      </body>
-    </html>
-  );
-}
-```
+| Function | Usage |
+|----------|-------|
+| `auth()` | Get session in Server Components |
+| `nguard.createSession()` | Create new session |
+| `nguard.clearSession()` | Clear session |
+| `nguard.validateSession()` | Validate token |
 
 ## Best Practices
 
-1. **Always use SessionProvider** at the root level (app/layout.tsx)
-2. **Get session in Server Components** when possible (better for SEO)
-3. **Handle loading and error states** in client components
-4. **Check session before rendering protected content**
-5. **Use hooks for dynamic operations** (login, logout, update)
-6. **Validate session on app load** with `useValidateSession`
-
-## API Response Structure
-
-Your backend determines the response format. Nguard returns whatever your API returns:
-
-```typescript
-// Your API could return any structure
-await login({ email: 'user@example.com', password: 'pass' });
-
-// Possible responses:
-{
-  session: { id: '123', email: 'user@example.com', role: 'admin' }
-}
-
-// Or with status message:
-{
-  success: true,
-  message: 'Logged in successfully',
-  session: { /* ... */ }
-}
-
-// Or with error:
-{
-  success: false,
-  error: 'Invalid credentials'
-}
-```
+1. **Get session in Server Components** - Better performance and SEO
+2. **Handle loading states** - Show loading indicators
+3. **Handle errors gracefully** - Don't crash on login errors
+4. **Validate on load** - Check session when app starts
+5. **Use TypeScript** - Get type safety for session data
 
 ## See Also
 
-- [CLI Setup Guide](./CLI-SETUP.md) - Setup wizard guide
-- [API Reference](./API-CLIENT.md) - All available hooks
-- [Middleware Guide](./MIDDLEWARE.md) - Add authentication middleware
-- [Session Validation](./VALIDATION.md) - Validate session patterns
+- [CLI Setup](./CLI-SETUP.md) - Installation
+- [API Reference](./API-CLIENT.md) - All methods
+- [Middleware Guide](./MIDDLEWARE.md) - Add security
+- [Validation Guide](./VALIDATION.md) - Check session

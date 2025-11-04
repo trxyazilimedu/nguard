@@ -1,207 +1,34 @@
-# Nguard - Hızlı Başlangıç (5 dakika)
+# Hızlı Başlangıç
 
-Adım adım Nguard'ı kuralım!
+`npx nguard-setup` çalıştırdıktan sonra, Nguard'ı nasıl kullanacağını öğren.
 
-## 1️⃣ Kurulum
+## SessionProvider Kur
 
-```bash
-npm install nguard
-```
-
-## 2️⃣ Environment Değişkenleri
-
-`.env.local` dosyası oluştur:
-
-```env
-NGUARD_SECRET=your-secret-min-32-chars-openssl-rand-base64-32
-BACKEND_API_URL=http://localhost:8080/api
-```
-
-Secret oluştur:
-```bash
-openssl rand -base64 32
-```
-
-> **Not**: `BACKEND_API_URL` kendi backend'inizin adresidir (Spring, Express, Node.js vb.)
-
-## 3️⃣ Server Setup (lib/auth.ts)
-
-```typescript
-import { initializeServer } from 'nguard/server';
-import { headers } from 'next/headers';
-
-export const nguard = initializeServer({
-  secret: process.env.NGUARD_SECRET!,
-  secure: process.env.NODE_ENV === 'production',
-});
-
-// Next Auth gibi auth() fonksiyonu - server ve client'te kullan
-export async function auth() {
-  try {
-    const headersList = await headers();
-    const cookie = headersList.get('cookie');
-    if (!cookie) return null;
-
-    return await nguard.validateSession(cookie);
-  } catch (error) {
-    return null;
-  }
-}
-
-// Helper functions
-export const createSession = (user: any, data?: any) =>
-  nguard.createSession(user, data);
-
-export const clearSession = () =>
-  nguard.clearSession();
-```
-
-> **Kullanım**: `auth()` fonksiyonunu Next Auth gibi server component'lerde ve API route'larda kullan!
-
-## 4️⃣ API Routes Oluştur
-
-### Login Endpoint
-
-```typescript
-// app/api/auth/login/route.ts
-import { nguard } from '@/lib/auth';
-
-const BACKEND_API_URL = process.env.BACKEND_API_URL!;
-
-export async function POST(request: Request) {
-  try {
-    const { email, password } = await request.json();
-
-    // Step 1: Backend'e login isteği gönder
-    const backendResponse = await fetch(`${BACKEND_API_URL}/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-
-    if (!backendResponse.ok) {
-      throw new Error('Authentication failed');
-    }
-
-    // Step 2: Backend'den verileri al
-    const backendData = await backendResponse.json();
-
-    // Step 3: Nguard ile session oluştur
-    // Backend'den gelen tüm verileri olduğu gibi session'a geç
-    const { session, setCookieHeader } = await nguard.createSession({
-      ...backendData,     // Backend'den gelen tüm veriler (user, role, permissions, vb)
-      expires: Date.now() + 24 * 60 * 60 * 1000  // İsteğe bağlı: expiration belirle
-    });
-
-    return Response.json({ session }, {
-      headers: { 'Set-Cookie': setCookieHeader }
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    return Response.json({ error: 'Login başarısız' }, { status: 401 });
-  }
-}
-```
-
-### Logout Endpoint
-
-```typescript
-// app/api/auth/logout/route.ts
-import { nguard } from '@/lib/auth';
-
-export async function POST(request: Request) {
-  return Response.json({ ok: true }, {
-    headers: { 'Set-Cookie': nguard.clearSession() }
-  });
-}
-```
-
-### Session Endpoint
-
-```typescript
-// app/api/auth/session/route.ts
-import { nguard } from '@/lib/auth';
-
-export async function GET(request: Request) {
-  try {
-    const headers = Object.fromEntries(request.headers.entries());
-    const session = await nguard.validateSession(headers.cookie);
-
-    if (!session) {
-      return Response.json({ session: null }, { status: 401 });
-    }
-
-    return Response.json({ session });
-  } catch (error) {
-    return Response.json({ session: null }, { status: 401 });
-  }
-}
-```
-
-## 5️⃣ Client Setup (app/layout.tsx)
-
-### Basit Kurulum (Önerilen)
+`app/layout.tsx`'de SessionProvider ile uygulamayı sarıp kapat:
 
 ```typescript
 'use client';
 
 import { SessionProvider } from 'nguard/client';
 
-export default function RootLayout({ children }: any) {
+export default function RootLayout({ children }) {
   return (
     <html>
       <body>
-        <SessionProvider>
-          {children}
-        </SessionProvider>
+        <SessionProvider>{children}</SessionProvider>
       </body>
     </html>
   );
 }
 ```
 
-**Otomatik olarak kullanılan varsayılan API endpoints:**
-- Login: `POST /api/auth/login`
-- Logout: `POST /api/auth/logout`
-
-### Custom Callbacks İle (İsteğe Bağlı)
-
-Eğer farklı endpoint'ler kullanmak istersen:
+## Server Components'te Oturum Al
 
 ```typescript
-'use client';
-
-import { SessionProvider, type LoginCallback } from 'nguard/client';
-
-const handleLogin: LoginCallback = async (credentials) => {
-  const res = await fetch('/auth/login', { // Farklı endpoint
-    method: 'POST',
-    body: JSON.stringify(credentials),
-  });
-  const data = await res.json();
-  return { user: data.user, data: data.data };
-};
-
-export default function RootLayout({ children }: any) {
-  return (
-    <html>
-      <body>
-        <SessionProvider onLogin={handleLogin}>
-          {children}
-        </SessionProvider>
-      </body>
-    </html>
-  );
-}
-```
-
-## 6️⃣ Server Component'te Session'ı Al
-
-```typescript
+// app/dashboard/page.tsx
 import { auth } from '@/lib/auth';
 
 export default async function Dashboard() {
-  // Next Auth gibi - server component'te doğrudan session al
   const session = await auth();
 
   if (!session) {
@@ -210,76 +37,183 @@ export default async function Dashboard() {
 
   return (
     <div>
-      <h1>Hoşgeldiniz, {session.user.name}</h1>
-      <p>Email: {session.user.email}</p>
-      <p>Role: {session.data?.role}</p>
+      <h1>Merhaba {session.email}</h1>
+      <p>Role: {session.role}</p>
     </div>
   );
 }
 ```
 
-## 7️⃣ Client Component'te Kullan
-
-### Basit Kullanım
+## Client Components'te Oturum Al
 
 ```typescript
 'use client';
 
-import { useAuth } from 'nguard/client';
+import { useSession } from 'nguard/client';
 
-export function Dashboard() {
-  const { user, isAuthenticated, logout } = useAuth();
+export function Profile() {
+  const { session, loading } = useSession();
 
-  if (!isAuthenticated) return <LoginForm />;
+  if (loading) return <div>Yükleniyor...</div>;
+  if (!session) return <div>Giriş yapılmamış</div>;
+
+  return <div>Hoşgeldin, {session.email}</div>;
+}
+```
+
+## Giriş Yap
+
+```typescript
+'use client';
+
+import { useLogin } from 'nguard/client';
+
+export function LoginForm() {
+  const { login, isLoading } = useLogin();
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    const response = await login({
+      email: formData.get('email'),
+      password: formData.get('password'),
+    });
+
+    if (response.session) {
+      console.log('Giriş yapıldı!');
+    } else if (response.error) {
+      console.error('Hata:', response.error);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <input type="email" name="email" placeholder="Email" required />
+      <input type="password" name="password" placeholder="Şifre" required />
+      <button disabled={isLoading}>
+        {isLoading ? 'Yükleniyor...' : 'Giriş Yap'}
+      </button>
+    </form>
+  );
+}
+```
+
+## Çıkış Yap
+
+```typescript
+'use client';
+
+import { useLogout } from 'nguard/client';
+
+export function LogoutButton() {
+  const { logout, isLoading } = useLogout();
+
+  return (
+    <button onClick={logout} disabled={isLoading}>
+      {isLoading ? 'Yükleniyor...' : 'Çıkış Yap'}
+    </button>
+  );
+}
+```
+
+## Oturumu Güncelle
+
+```typescript
+'use client';
+
+import { useSessionUpdate } from 'nguard/client';
+
+export function UpdateRole() {
+  const { updateSession, isLoading } = useSessionUpdate();
+
+  async function handleUpdate() {
+    // API'den yeni oturum verisi al
+    const response = await fetch('/api/user/update-role', {
+      method: 'POST',
+      body: JSON.stringify({ role: 'admin' }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      await updateSession(data.session);
+    }
+  }
+
+  return (
+    <button onClick={handleUpdate} disabled={isLoading}>
+      Role'ü Güncelle
+    </button>
+  );
+}
+```
+
+## Oturumu Doğrula
+
+```typescript
+'use client';
+
+import { useValidateSession } from 'nguard/client';
+
+export function CheckSession() {
+  const { validate, isValid, validationResult } = useValidateSession();
 
   return (
     <div>
-      <h1>Hoşgeldiniz, {user?.name}</h1>
-      <button onClick={logout}>Çıkış Yap</button>
+      <button onClick={() => validate()}>Oturumu Kontrol Et</button>
+
+      {isValid && (
+        <p>
+          ✅ Oturum geçerli
+          {validationResult?.expiresIn && (
+            <span> - {Math.round(validationResult.expiresIn / 1000)}s içinde süresi dolar</span>
+          )}
+        </p>
+      )}
+
+      {!isValid && validationResult?.error && (
+        <p>❌ {validationResult.error}</p>
+      )}
     </div>
   );
 }
 ```
 
-### Hata Yönetimi İle
+## Hata Yönetimi
+
+Tüm login/logout metodları hata bilgisi ile yanıt döndürür:
 
 ```typescript
 'use client';
 
-import { useAuth } from 'nguard/client';
 import { useState } from 'react';
+import { useLogin } from 'nguard/client';
 
-export function LoginForm() {
-  const { login, isLoading } = useAuth();
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export function SafeLoginForm() {
+  const { login, isLoading } = useLogin();
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    setMessage(null);
-    setError(null);
+    setMessage('');
+    setError('');
 
-    const data = new FormData(e.currentTarget);
+    const fd = new FormData(e.currentTarget);
 
     try {
-      // login() API response'unu doğrudan döndürür
       const response = await login({
-        email: data.get('email'),
-        password: data.get('password'),
+        email: fd.get('email'),
+        password: fd.get('password'),
       });
 
-      // API'niz response yapısını tanımlar
-      console.log('API Response:', response);
-
-      if (response.success) {
-        setMessage(response.message || 'Giriş başarılı');
-        // Dashboard'a yönlendir
-      } else {
-        setError(response.error || response.message || 'Giriş başarısız');
+      if (response.session) {
+        setMessage('Giriş başarılı!');
+      } else if (response.error) {
+        setError(response.error);
       }
     } catch (err) {
-      // Network/fetch hatalarını işle
-      setError(err instanceof Error ? err.message : 'Giriş başarısız');
+      setError('Ağ hatası: ' + err.message);
     }
   }
 
@@ -291,32 +225,44 @@ export function LoginForm() {
       <input type="email" name="email" placeholder="Email" required />
       <input type="password" name="password" placeholder="Şifre" required />
       <button disabled={isLoading}>
-        {isLoading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
+        {isLoading ? 'Yükleniyor...' : 'Giriş Yap'}
       </button>
     </form>
   );
 }
 ```
 
-## ✅ Tamamlandı!
+## Tüm Hooks
 
-Artık Nguard kuruldu ve çalışıyor. Akış:
+| Hook | Kullanım |
+|------|----------|
+| `useSession()` | Mevcut oturumu al |
+| `useLogin()` | Kimlik bilgileri ile giriş yap |
+| `useLogout()` | Kullanıcıyı çıkış yap |
+| `useSessionUpdate()` | Oturum verisi güncelle |
+| `useValidateSession()` | Oturum geçerli mi kontrol et |
+| `useAuth()` | Daha fazla özellik ile hook |
 
-1. Kullanıcı form doldurur
-2. `login()` çağrılır
-3. Client `onLogin` callback → `/api/auth/login` POST
-4. Frontend API Route → **Backend'e isteği gönder**
-5. Backend'de (Spring/Express/vb.) → kullanıcı doğrulama + veritabanı kontrolü
-6. Backend'den user verisi döner
-7. Frontend'te Nguard → JWT oluşturur ve cookie'ye koyar
-8. Session state güncellenir
-9. Component re-render olur → Giriş yapılmış ✅
+## Sunucu Tarafı Fonksiyonlar
 
-**Fark**: Artık authentication backend'de yapılıyor, Nguard sadece JWT/session yönetiyor!
+| Fonksiyon | Kullanım |
+|-----------|----------|
+| `auth()` | Server Components'te oturum al |
+| `nguard.createSession()` | Yeni oturum oluştur |
+| `nguard.clearSession()` | Oturumu temizle |
+| `nguard.validateSession()` | Token doğrula |
 
-## 📖 Sonraki Adımlar
+## En İyi Uygulamalar
 
-- [CALLBACKS.md](./CALLBACKS.md) - Callback'leri detaylı öğren
-- [API-SERVER.md](./API-SERVER.md) - Server fonksiyonları
-- [API-CLIENT.md](./API-CLIENT.md) - Client hooks
-- [EXAMPLES.md](./EXAMPLES.md) - Gerçek örnekler
+1. **Server Components'te oturum al** - Daha iyi performans ve SEO
+2. **Yükleme durumlarını işle** - Yükleme göstergeleri göster
+3. **Hataları zarif şekilde işle** - Giriş hatalarında çöküş yapma
+4. **Yüklenişte doğrula** - Uygulama başladığında oturumu kontrol et
+5. **TypeScript kullan** - Oturum verisi için tür güvenliği al
+
+## Ayrıca Bak
+
+- [CLI Kurulum](./CLI-SETUP.md) - Kurulum
+- [API Referansı](./API-CLIENT.md) - Tüm metodlar
+- [Ara Yazılım Rehberi](./MIDDLEWARE.md) - Güvenlik ekle
+- [Doğrulama Rehberi](./VALIDATION.md) - Oturumu kontrol et
