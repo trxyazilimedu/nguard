@@ -220,33 +220,12 @@ export default async function Dashboard() {
 
 ## 7️⃣ Client Component'te Kullan
 
+### Basit Kullanım
+
 ```typescript
 'use client';
 
 import { useAuth } from 'nguard/client';
-
-export function LoginForm() {
-  const { login, isLoading } = useAuth();
-
-  return (
-    <form onSubmit={async (e) => {
-      e.preventDefault();
-      const data = new FormData(e.currentTarget);
-
-      // login() → client onLogin callback → POST /api/auth/login → onServerLogin callback
-      await login({
-        email: data.get('email'),
-        password: data.get('password'),
-      });
-    }}>
-      <input type="email" name="email" placeholder="Email" required />
-      <input type="password" name="password" placeholder="Şifre" required />
-      <button disabled={isLoading}>
-        {isLoading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
-      </button>
-    </form>
-  );
-}
 
 export function Dashboard() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -258,6 +237,57 @@ export function Dashboard() {
       <h1>Hoşgeldiniz, {user?.name}</h1>
       <button onClick={logout}>Çıkış Yap</button>
     </div>
+  );
+}
+```
+
+### Response Hanlama İle
+
+```typescript
+'use client';
+
+import { useAuth, type LoginResponse } from 'nguard/client';
+import { useState } from 'react';
+
+export function LoginForm() {
+  const { login, isLoading } = useAuth();
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMessage(null);
+    setError(null);
+
+    const data = new FormData(e.currentTarget);
+
+    // login() artık success, message, user ve data içeren LoginResponse döndürüyor
+    const response = await login({
+      email: data.get('email'),
+      password: data.get('password'),
+    });
+
+    if (response.success) {
+      setMessage(response.message); // "Login başarılı"
+      console.log('Kullanıcı:', response.user);
+      console.log('Data:', response.data); // { role, permissions, vb. }
+      // Dashboard'a yönlendir
+    } else {
+      setError(response.error || response.message);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {message && <div style={{ color: 'green' }}>{message}</div>}
+      {error && <div style={{ color: 'red' }}>{error}</div>}
+
+      <input type="email" name="email" placeholder="Email" required />
+      <input type="password" name="password" placeholder="Şifre" required />
+      <button disabled={isLoading}>
+        {isLoading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
+      </button>
+    </form>
   );
 }
 ```

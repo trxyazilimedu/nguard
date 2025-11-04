@@ -20,6 +20,9 @@ export type {
   LoginCallback,
   LogoutCallback,
   InitializeSessionCallback,
+  LoginResponse,
+  LogoutResponse,
+  UpdateSessionResponse,
 } from './client';
 
 // Server Types & Callbacks

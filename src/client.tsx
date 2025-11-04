@@ -30,12 +30,42 @@ export type LogoutCallback = () => Promise<void>;
  */
 export type InitializeSessionCallback = () => Promise<Session | null>;
 
+/**
+ * Login response type
+ */
+export interface LoginResponse {
+  success: boolean;
+  message: string;
+  user?: SessionUser;
+  data?: SessionData;
+  error?: string;
+}
+
+/**
+ * Logout response type
+ */
+export interface LogoutResponse {
+  success: boolean;
+  message: string;
+  error?: string;
+}
+
+/**
+ * Update session response type
+ */
+export interface UpdateSessionResponse {
+  success: boolean;
+  message: string;
+  session?: Session;
+  error?: string;
+}
+
 interface SessionContextType {
   session: Session | null;
   status: 'loading' | 'authenticated' | 'unauthenticated';
-  login: <T = any>(credentials: T) => Promise<void>;
-  logout: () => Promise<void>;
-  updateSession: (user: SessionUser, data?: SessionData) => Promise<void>;
+  login: <T = any>(credentials: T) => Promise<LoginResponse>;
+  logout: () => Promise<LogoutResponse>;
+  updateSession: (user: SessionUser, data?: SessionData) => Promise<UpdateSessionResponse>;
   isLoading: boolean;
 }
 
@@ -158,7 +188,7 @@ export function SessionProvider({
     };
   };
 
-  const login = async <T = any,>(credentials: T) => {
+  const login = async <T = any,>(credentials: T): Promise<LoginResponse> => {
     const loginFn = onLogin || defaultLogin;
 
     setIsLoading(true);
@@ -184,9 +214,24 @@ export function SessionProvider({
       }
 
       onSessionChange?.(newSession);
+
+      // Return success response
+      return {
+        success: true,
+        message: 'Login successful',
+        user,
+        data,
+      };
     } catch (error) {
-      console.error('Error during login:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      console.error('Error during login:', errorMessage);
+
+      // Return error response
+      return {
+        success: false,
+        message: errorMessage,
+        error: errorMessage,
+      };
     } finally {
       setIsLoading(false);
     }
@@ -203,7 +248,7 @@ export function SessionProvider({
     }
   };
 
-  const logout = async () => {
+  const logout = async (): Promise<LogoutResponse> => {
     setIsLoading(true);
     try {
       // Use custom logout callback if provided, otherwise use default
@@ -214,15 +259,33 @@ export function SessionProvider({
       setStatus('unauthenticated');
       onSessionChange?.(null);
       clearCookieClient(cookieName);
+
+      // Return success response
+      return {
+        success: true,
+        message: 'Logout successful',
+      };
     } catch (error) {
-      console.error('Error during logout:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Logout failed';
+      console.error('Error during logout:', errorMessage);
+
+      // Return error response but still clear session
+      setSession(null);
+      setStatus('unauthenticated');
+      onSessionChange?.(null);
+      clearCookieClient(cookieName);
+
+      return {
+        success: false,
+        message: errorMessage,
+        error: errorMessage,
+      };
     } finally {
       setIsLoading(false);
     }
   };
 
-  const updateSession = async (user: SessionUser, data?: SessionData) => {
+  const updateSession = async (user: SessionUser, data?: SessionData): Promise<UpdateSessionResponse> => {
     setIsLoading(true);
     try {
       const updatedSession: Session = {
@@ -234,9 +297,23 @@ export function SessionProvider({
       setSession(updatedSession);
       setStatus('authenticated');
       onSessionChange?.(updatedSession);
+
+      // Return success response
+      return {
+        success: true,
+        message: 'Session updated successfully',
+        session: updatedSession,
+      };
     } catch (error) {
-      console.error('Error updating session:', error);
-      throw error;
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update session';
+      console.error('Error updating session:', errorMessage);
+
+      // Return error response
+      return {
+        success: false,
+        message: errorMessage,
+        error: errorMessage,
+      };
     } finally {
       setIsLoading(false);
     }

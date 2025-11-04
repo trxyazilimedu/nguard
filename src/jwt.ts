@@ -22,9 +22,13 @@ export class JWTHandler {
    */
   encode(payload: SessionPayload): string {
     try {
+      // Don't use expiresIn since payload already has exp
+      // jwt.sign will automatically set exp if expiresIn is provided
+      // but payload already contains exp, so we just sign without expiresIn
       return jwt.sign(payload, this.secret, {
         algorithm: this.algorithm,
-        expiresIn: payload.exp - payload.iat,
+        // expiresIn should not be used when payload has exp already
+        noTimestamp: false,
       });
     } catch (error) {
       console.error('Error encoding JWT:', error);

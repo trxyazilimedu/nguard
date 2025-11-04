@@ -220,37 +220,12 @@ export default async function Dashboard() {
 
 ## 7️⃣ Use in Client Components
 
+### Simple Usage
+
 ```typescript
 'use client';
 
 import { useAuth } from 'nguard/client';
-
-export function LoginForm() {
-  const { login, isLoading } = useAuth();
-
-  return (
-    <form onSubmit={async (e) => {
-      e.preventDefault();
-      const data = new FormData(e.currentTarget);
-
-      try {
-        // login() → client onLogin callback → POST /api/auth/login → backend auth
-        await login({
-          email: data.get('email'),
-          password: data.get('password'),
-        });
-      } catch (error) {
-        alert(error instanceof Error ? error.message : 'Login failed');
-      }
-    }}>
-      <input type="email" name="email" placeholder="Email" required />
-      <input type="password" name="password" placeholder="Password" required />
-      <button disabled={isLoading}>
-        {isLoading ? 'Logging in...' : 'Login'}
-      </button>
-    </form>
-  );
-}
 
 export function Dashboard() {
   const { user, isAuthenticated, logout } = useAuth();
@@ -262,6 +237,57 @@ export function Dashboard() {
       <h1>Welcome, {user?.name}</h1>
       <button onClick={logout}>Logout</button>
     </div>
+  );
+}
+```
+
+### With Response Handling
+
+```typescript
+'use client';
+
+import { useAuth, type LoginResponse } from 'nguard/client';
+import { useState } from 'react';
+
+export function LoginForm() {
+  const { login, isLoading } = useAuth();
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMessage(null);
+    setError(null);
+
+    const data = new FormData(e.currentTarget);
+
+    // login() now returns LoginResponse with success, message, user, and data
+    const response = await login({
+      email: data.get('email'),
+      password: data.get('password'),
+    });
+
+    if (response.success) {
+      setMessage(response.message); // "Login successful"
+      console.log('User:', response.user);
+      console.log('Data:', response.data); // { role, permissions, etc. }
+      // Navigate to dashboard
+    } else {
+      setError(response.error || response.message);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      {message && <div style={{ color: 'green' }}>{message}</div>}
+      {error && <div style={{ color: 'red' }}>{error}</div>}
+
+      <input type="email" name="email" placeholder="Email" required />
+      <input type="password" name="password" placeholder="Password" required />
+      <button disabled={isLoading}>
+        {isLoading ? 'Logging in...' : 'Login'}
+      </button>
+    </form>
   );
 }
 ```
