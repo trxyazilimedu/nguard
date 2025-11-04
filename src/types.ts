@@ -15,9 +15,8 @@ export interface SessionUser {
 }
 
 export interface Session {
-  user: SessionUser;
-  expires: number;
-  data?: SessionData;
+  [key: string]: any; // Flexible session structure - can store any data
+  expires: number;    // Required: session expiration timestamp
 }
 
 export interface NguardConfig {

@@ -102,8 +102,7 @@ export class NguardServer {
    * Create a new session
    */
   async createSession(
-    user: SessionUser,
-    data?: SessionData,
+    sessionData: Session,
     options?: SessionOptions
   ): Promise<{ token: string; setCookieHeader: string; session: Session }> {
     const sessionId = JWTHandler.generateSessionId();
@@ -111,14 +110,13 @@ export class NguardServer {
     const maxAge = options?.maxAge || this.config.maxAge || 24 * 60 * 60;
     const expiresAt = now + maxAge;
 
-    // Create JWT payload
+    // Create JWT payload from session data
     let payload: SessionPayload = {
       sessionId,
-      user,
       iat: now,
       exp: expiresAt,
-      data,
-    };
+      ...sessionData, // Spread all session data into payload
+    } as SessionPayload;
 
     // Apply JWT callbacks
     for (const callback of this.jwtCallbacks) {
@@ -128,11 +126,10 @@ export class NguardServer {
     // Encode token
     const token = this.jwtHandler.encode(payload);
 
-    // Create session object
+    // Create session object with expiration
     let session: Session = {
-      user,
+      ...sessionData,
       expires: expiresAt * 1000, // Convert to milliseconds for JS
-      data,
     };
 
     // Apply session callbacks
@@ -209,11 +206,10 @@ export class NguardServer {
    * Update session data
    */
   async updateSession(
-    user: SessionUser,
-    data?: SessionData,
+    sessionData: Session,
     options?: SessionOptions
   ): Promise<{ token: string; setCookieHeader: string; session: Session }> {
-    return this.createSession(user, data, options);
+    return this.createSession(sessionData, options);
   }
 
   /**

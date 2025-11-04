@@ -83,15 +83,15 @@ export async function POST(request: Request) {
       throw new Error('Authentication failed');
     }
 
-    // Step 2: Backend'den kullanıcı verisini al
+    // Step 2: Backend'den verileri al
     const backendData = await backendResponse.json();
-    const { user } = backendData;
 
     // Step 3: Nguard ile session oluştur
-    const { session, setCookieHeader } = await nguard.createSession(
-      user, // { id, email, name }
-      { role: user.role } // Backend'den gelen data
-    );
+    // Backend'den gelen tüm verileri olduğu gibi session'a geç
+    const { session, setCookieHeader } = await nguard.createSession({
+      ...backendData,     // Backend'den gelen tüm veriler (user, role, permissions, vb)
+      expires: Date.now() + 24 * 60 * 60 * 1000  // İsteğe bağlı: expiration belirle
+    });
 
     return Response.json({ session }, {
       headers: { 'Set-Cookie': setCookieHeader }
@@ -241,12 +241,12 @@ export function Dashboard() {
 }
 ```
 
-### Response Hanlama İle
+### Hata Yönetimi İle
 
 ```typescript
 'use client';
 
-import { useAuth, type LoginResponse } from 'nguard/client';
+import { useAuth } from 'nguard/client';
 import { useState } from 'react';
 
 export function LoginForm() {
@@ -261,19 +261,25 @@ export function LoginForm() {
 
     const data = new FormData(e.currentTarget);
 
-    // login() artık success, message, user ve data içeren LoginResponse döndürüyor
-    const response = await login({
-      email: data.get('email'),
-      password: data.get('password'),
-    });
+    try {
+      // login() API response'unu doğrudan döndürür
+      const response = await login({
+        email: data.get('email'),
+        password: data.get('password'),
+      });
 
-    if (response.success) {
-      setMessage(response.message); // "Login başarılı"
-      console.log('Kullanıcı:', response.user);
-      console.log('Data:', response.data); // { role, permissions, vb. }
-      // Dashboard'a yönlendir
-    } else {
-      setError(response.error || response.message);
+      // API'niz response yapısını tanımlar
+      console.log('API Response:', response);
+
+      if (response.success) {
+        setMessage(response.message || 'Giriş başarılı');
+        // Dashboard'a yönlendir
+      } else {
+        setError(response.error || response.message || 'Giriş başarısız');
+      }
+    } catch (err) {
+      // Network/fetch hatalarını işle
+      setError(err instanceof Error ? err.message : 'Giriş başarısız');
     }
   }
 

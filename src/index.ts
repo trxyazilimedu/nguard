@@ -45,6 +45,31 @@ export {
   useLogout,
 } from './client';
 
+// Middleware
+export type {
+  NguardMiddleware,
+  MiddlewareConfig,
+  RateLimitConfig,
+  LoggingConfig,
+  CORSConfig,
+  HeadersConfig,
+} from './middleware';
+
+export {
+  createMiddlewareChain,
+  requireAuth,
+  requireRole,
+  requirePermission,
+  rateLimit,
+  logger,
+  cors,
+  injectHeaders,
+  compose,
+  withErrorHandling,
+  when,
+  onPath,
+} from './middleware';
+
 // Utilities
 export { JWTHandler } from './jwt';
 export {

@@ -4,83 +4,78 @@ Complete documentation for client-side hooks and components in Nguard.
 
 ## Overview
 
-Nguard provides React hooks for managing authentication on the client side. All authentication functions now return structured response objects instead of throwing errors.
+Nguard provides React hooks for managing authentication on the client side. Authentication functions return the API response directly without any wrapping, allowing your backend to define the response structure.
 
 ## Response Types
 
-### LoginResponse
+### login() - API Response
 
-Returned by `login()` function.
+The `login()` function returns the response from your `/api/auth/login` endpoint directly.
 
-```typescript
-interface LoginResponse {
-  success: boolean;           // Login was successful
-  message: string;            // "Login successful" or error description
-  user?: SessionUser;         // User info (if success)
-  data?: SessionData;         // Session data like role (if success)
-  error?: string;             // Error message (if not success)
-}
-```
-
-**Example:**
+**Example API Response:**
 
 ```typescript
 const response = await login({ email, password });
 
-if (response.success) {
-  console.log(response.user);   // { id, email, name }
-  console.log(response.data);   // { role: 'admin' }
-} else {
-  console.log(response.error);  // "Invalid credentials"
+// Response structure depends on your backend API
+// Example:
+{
+  success: true,
+  message: "Login successful",
+  user: { id: 1, email: "user@example.com", name: "John" },
+  data: { role: 'admin', permissions: ['read', 'write'] }
 }
 ```
 
-### LogoutResponse
+### logout() - API Response
 
-Returned by `logout()` function.
+The `logout()` function returns the response from your `/api/auth/logout` endpoint directly.
 
-```typescript
-interface LogoutResponse {
-  success: boolean;           // Logout was successful
-  message: string;            // "Logout successful" or error description
-  error?: string;             // Error message (if not success)
-}
-```
-
-**Example:**
+**Example API Response:**
 
 ```typescript
 const response = await logout();
 
-if (response.success) {
-  console.log('Logged out successfully');
-} else {
-  console.log('Logout error:', response.error);
+// Response structure depends on your backend API
+// Example:
+{
+  success: true,
+  message: "Logout successful"
 }
 ```
 
-### UpdateSessionResponse
+### updateSession() - Local Response
 
-Returned by `updateSession()` function.
+The `updateSession()` function updates the local session state and returns the updated session.
 
-```typescript
-interface UpdateSessionResponse {
-  success: boolean;           // Update was successful
-  message: string;            // "Session updated successfully" or error description
-  session?: Session;          // Updated session (if success)
-  error?: string;             // Error message (if not success)
-}
-```
-
-**Example:**
+**Response:**
 
 ```typescript
 const response = await updateSession(updatedUser, updatedData);
 
-if (response.success) {
-  console.log('Session updated:', response.session);
-} else {
-  console.log('Update error:', response.error);
+// Always returns success with updated session
+{
+  success: true,
+  message: "Session updated successfully",
+  session: {
+    user: SessionUser,
+    expires: number,
+    data?: SessionData
+  }
+}
+```
+
+## Error Handling
+
+If an API call fails (network error, 4xx/5xx response), the error is thrown and should be caught:
+
+```typescript
+try {
+  const response = await login({ email, password });
+  // Handle response from API
+} catch (error) {
+  // Handle network/fetch errors
+  console.error('Login failed:', error.message);
 }
 ```
 
@@ -99,8 +94,8 @@ Simplified authentication hook for common operations.
   user: SessionUser | null;           // Current user or null
   isAuthenticated: boolean;            // true if user is logged in
   isLoading: boolean;                  // true if auth is loading
-  login: (credentials: any) => Promise<LoginResponse>;
-  logout: () => Promise<LogoutResponse>;
+  login: (credentials: any) => Promise<any>;  // Returns API response
+  logout: () => Promise<any>;                 // Returns API response
 }
 ```
 
@@ -145,9 +140,9 @@ Full session context hook. Use this when you need more control.
 {
   session: Session | null;                                    // Full session object
   status: 'loading' | 'authenticated' | 'unauthenticated';   // Auth status
-  login: <T = any>(credentials: T) => Promise<LoginResponse>;
-  logout: () => Promise<LogoutResponse>;
-  updateSession: (user: SessionUser, data?: SessionData) => Promise<UpdateSessionResponse>;
+  login: <T = any>(credentials: T) => Promise<any>;           // Returns API response
+  logout: () => Promise<any>;                                 // Returns API response
+  updateSession: (user: SessionUser, data?: SessionData) => Promise<any>;  // Returns updated session
   isLoading: boolean;                                         // true if operation in progress
 }
 ```
@@ -192,7 +187,7 @@ Login function only (simplified).
 
 ```typescript
 {
-  login: <T = any>(credentials: T) => Promise<LoginResponse>;
+  login: <T = any>(credentials: T) => Promise<any>;  // Returns API response
   isLoading: boolean;
 }
 ```
@@ -209,15 +204,17 @@ export function LoginForm() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    const response = await login({
-      email: e.target.email.value,
-      password: e.target.password.value,
-    });
+    try {
+      const response = await login({
+        email: e.target.email.value,
+        password: e.target.password.value,
+      });
 
-    if (response.success) {
-      console.log('Logged in as:', response.user?.email);
-    } else {
-      alert(response.error);
+      // Handle response from your API
+      console.log('Login response:', response);
+    } catch (error) {
+      // Handle network/fetch errors
+      alert('Login failed: ' + error.message);
     }
   }
 
@@ -241,7 +238,7 @@ Logout function only (simplified).
 
 ```typescript
 {
-  logout: () => Promise<LogoutResponse>;
+  logout: () => Promise<any>;  // Returns API response
   isLoading: boolean;
 }
 ```
@@ -257,13 +254,15 @@ export function LogoutButton() {
   const { logout, isLoading } = useLogout();
 
   async function handleLogout() {
-    const response = await logout();
+    try {
+      const response = await logout();
 
-    if (response.success) {
-      console.log('Logged out successfully');
+      // Handle response from your API
+      console.log('Logout response:', response);
       // Optionally navigate to login page
-    } else {
-      alert(response.error);
+    } catch (error) {
+      // Handle network/fetch errors
+      alert('Logout failed: ' + error.message);
     }
   }
 

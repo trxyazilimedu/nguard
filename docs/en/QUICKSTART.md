@@ -85,13 +85,13 @@ export async function POST(request: Request) {
 
     // Step 2: Get user data from backend
     const backendData = await backendResponse.json();
-    const { user } = backendData;
 
     // Step 3: Create session with Nguard
-    const { session, setCookieHeader } = await nguard.createSession(
-      user, // { id, email, name }
-      { role: user.role } // Data from backend
-    );
+    // Pass the entire session data as-is from your backend
+    const { session, setCookieHeader } = await nguard.createSession({
+      ...backendData,     // All data from backend (user, role, permissions, etc)
+      expires: Date.now() + 24 * 60 * 60 * 1000  // Optional: set expiration
+    });
 
     return Response.json({ session }, {
       headers: { 'Set-Cookie': setCookieHeader }
@@ -241,12 +241,12 @@ export function Dashboard() {
 }
 ```
 
-### With Response Handling
+### With Error Handling
 
 ```typescript
 'use client';
 
-import { useAuth, type LoginResponse } from 'nguard/client';
+import { useAuth } from 'nguard/client';
 import { useState } from 'react';
 
 export function LoginForm() {
@@ -261,19 +261,25 @@ export function LoginForm() {
 
     const data = new FormData(e.currentTarget);
 
-    // login() now returns LoginResponse with success, message, user, and data
-    const response = await login({
-      email: data.get('email'),
-      password: data.get('password'),
-    });
+    try {
+      // login() returns the API response directly
+      const response = await login({
+        email: data.get('email'),
+        password: data.get('password'),
+      });
 
-    if (response.success) {
-      setMessage(response.message); // "Login successful"
-      console.log('User:', response.user);
-      console.log('Data:', response.data); // { role, permissions, etc. }
-      // Navigate to dashboard
-    } else {
-      setError(response.error || response.message);
+      // Your API defines the response structure
+      console.log('API Response:', response);
+
+      if (response.success) {
+        setMessage(response.message || 'Login successful');
+        // Navigate to dashboard
+      } else {
+        setError(response.error || response.message || 'Login failed');
+      }
+    } catch (err) {
+      // Handle network/fetch errors
+      setError(err instanceof Error ? err.message : 'Login failed');
     }
   }
 

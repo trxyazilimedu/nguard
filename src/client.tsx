@@ -11,12 +11,9 @@ import { getCookieClient, clearCookieClient, setCookieClient } from './cookies';
 /**
  * Login callback function type
  * Implement this to handle login with your own backend
+ * Should return session data (flexible structure)
  */
-export type LoginCallback<T = any> = (credentials: T) => Promise<{
-  user: SessionUser;
-  data?: SessionData;
-  token?: string; // Optional: if you want to store JWT token
-}>;
+export type LoginCallback<T = any> = (credentials: T) => Promise<any>;
 
 /**
  * Logout callback function type
@@ -63,9 +60,9 @@ export interface UpdateSessionResponse {
 interface SessionContextType {
   session: Session | null;
   status: 'loading' | 'authenticated' | 'unauthenticated';
-  login: <T = any>(credentials: T) => Promise<LoginResponse>;
-  logout: () => Promise<LogoutResponse>;
-  updateSession: (user: SessionUser, data?: SessionData) => Promise<UpdateSessionResponse>;
+  login: <T = any>(credentials: T) => Promise<any>;
+  logout: () => Promise<any>;
+  updateSession: (user: SessionUser, data?: SessionData) => Promise<any>;
   isLoading: boolean;
 }
 
@@ -180,47 +177,39 @@ export function SessionProvider({
     }
 
     const data = await response.json();
-    return {
-      user: data.session.user,
-      data: data.session.data,
-      token: data.session.token,
-    };
+    // Return the session data directly from API
+    return data.session || data;
   };
 
-  const login = async <T = any,>(credentials: T): Promise<LoginResponse> => {
+  const login = async <T = any,>(credentials: T): Promise<any> => {
     const loginFn = onLogin || defaultLogin;
 
     setIsLoading(true);
     try {
-      const { user, data, token } = await loginFn(credentials);
+      const sessionData = await loginFn(credentials);
 
-      // Create session object
+      // Session data from callback is the session itself
+      // Ensure expires is set properly
       const now = Date.now();
       const newSession: Session = {
-        user,
-        expires: now + 24 * 60 * 60 * 1000, // Default 24 hours
-        data,
+        ...sessionData,
+        expires: sessionData.expires || now + 24 * 60 * 60 * 1000, // Default 24 hours if not provided
       };
 
       setSession(newSession);
       setStatus('authenticated');
 
       // Store token in cookie if provided
-      if (token) {
-        setCookieClient(cookieName, token, {
+      if (sessionData.token) {
+        setCookieClient(cookieName, sessionData.token, {
           maxAge: 24 * 60 * 60,
         });
       }
 
       onSessionChange?.(newSession);
 
-      // Return success response
-      return {
-        success: true,
-        message: 'Login successful',
-        user,
-        data,
-      };
+      // Return API response as-is
+      return sessionData;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Login failed';
 
@@ -244,25 +233,24 @@ export function SessionProvider({
     if (!response.ok) {
       throw new Error('Logout failed');
     }
+
+    return await response.json();
   };
 
-  const logout = async (): Promise<LogoutResponse> => {
+  const logout = async (): Promise<any> => {
     setIsLoading(true);
     try {
       // Use custom logout callback if provided, otherwise use default
       const logoutFn = onLogout || defaultLogout;
-      await logoutFn();
+      const response = await logoutFn();
 
       setSession(null);
       setStatus('unauthenticated');
       onSessionChange?.(null);
       clearCookieClient(cookieName);
 
-      // Return success response
-      return {
-        success: true,
-        message: 'Logout successful',
-      };
+      // Return API response as-is
+      return response;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Logout failed';
 
@@ -282,7 +270,7 @@ export function SessionProvider({
     }
   };
 
-  const updateSession = async (user: SessionUser, data?: SessionData): Promise<UpdateSessionResponse> => {
+  const updateSession = async (user: SessionUser, data?: SessionData): Promise<any> => {
     setIsLoading(true);
     try {
       const updatedSession: Session = {
@@ -295,7 +283,7 @@ export function SessionProvider({
       setStatus('authenticated');
       onSessionChange?.(updatedSession);
 
-      // Return success response
+      // Return the updated session directly
       return {
         success: true,
         message: 'Session updated successfully',
