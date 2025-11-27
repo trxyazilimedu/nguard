@@ -49,6 +49,9 @@ export {
 export type {
   NguardMiddleware,
   MiddlewareConfig,
+  RequireAuthConfig,
+  RequireRoleConfig,
+  RequirePermissionConfig,
   RateLimitConfig,
   LoggingConfig,
   CORSConfig,
