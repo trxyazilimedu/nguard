@@ -52,10 +52,16 @@ export function createMiddlewareChain(config: MiddlewareConfig): NguardMiddlewar
 /**
  * Authentication middleware - Require valid session
  */
-export const requireAuth = (): NguardMiddleware => {
+export interface RequireAuthConfig {
+  redirectTo?: string;
+}
+
+export const requireAuth = (config?: RequireAuthConfig): NguardMiddleware => {
+  const redirectTo: string = config?.redirectTo ?? '/login';
+
   return (request: NextRequest, session: Session | null) => {
     if (!session) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(new URL(redirectTo, request.url));
     }
   };
 };
@@ -63,12 +69,20 @@ export const requireAuth = (): NguardMiddleware => {
 /**
  * Role-based access control middleware
  */
-export const requireRole = (roles: string | string[]): NguardMiddleware => {
+export interface RequireRoleConfig {
+  roles: string | string[];
+  redirectTo?: string;
+}
+
+export const requireRole = (config: RequireRoleConfig | string | string[]): NguardMiddleware => {
+  // Support both legacy format (direct roles) and new config format
+  const roles = typeof config === 'object' && 'roles' in config ? config.roles : config;
+  const redirectTo: string = typeof config === 'object' && 'redirectTo' in config ? (config.redirectTo ?? '/login') : '/login';
   const roleList = Array.isArray(roles) ? roles : [roles];
 
   return (request: NextRequest, session: Session | null) => {
     if (!session) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(new URL(redirectTo, request.url));
     }
 
     // Check if session has role field
@@ -85,14 +99,22 @@ export const requireRole = (roles: string | string[]): NguardMiddleware => {
 /**
  * Permission-based access control middleware
  */
+export interface RequirePermissionConfig {
+  permissions: string | string[];
+  redirectTo?: string;
+}
+
 export const requirePermission = (
-  permissions: string | string[]
+  config: RequirePermissionConfig | string | string[]
 ): NguardMiddleware => {
+  // Support both legacy format (direct permissions) and new config format
+  const permissions = typeof config === 'object' && 'permissions' in config ? config.permissions : config;
+  const redirectTo: string = typeof config === 'object' && 'redirectTo' in config ? (config.redirectTo ?? '/login') : '/login';
   const permissionList = Array.isArray(permissions) ? permissions : [permissions];
 
   return (request: NextRequest, session: Session | null) => {
     if (!session) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(new URL(redirectTo, request.url));
     }
 
     // Check if session has permissions field
