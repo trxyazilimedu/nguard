@@ -1,6 +1,6 @@
 {
   "name": "nguard",
-  "version": "0.4.2",
+  "version": "0.4.4",
   "description": "Next.js 16+ session management library with built-in auth() function, callback-based architecture, and zero-config SessionProvider",
   "main": "dist/src/index.js",
   "bin": {

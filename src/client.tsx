@@ -6,7 +6,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Session, SessionUser, SessionData } from './types';
-import { getCookieClient, clearCookieClient, setCookieClient } from './cookies';
+import { clearCookieClient } from './cookies';
 
 /**
  * Login callback function type
@@ -328,12 +328,8 @@ export function SessionProvider({
         setSession(updatedSession);
         setStatus('authenticated');
 
-        // Update cookie if token is provided
-        if (responseData.token) {
-          setCookieClient(cookieName, responseData.token, {
-            maxAge: 24 * 60 * 60,
-          });
-        }
+        // NOTE: We don't set cookies client-side because they are HttpOnly
+        // The server already updated the cookie via Set-Cookie header
 
         onSessionChange?.(updatedSession);
 

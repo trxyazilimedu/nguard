@@ -142,7 +142,25 @@ async function analyzeProject(): Promise<ProjectStatus> {
   const libAuthTs = path.join(projectRoot, 'lib', 'auth.ts');
   const libAuthJs = path.join(projectRoot, 'lib', 'auth.js');
   const libAuthExists = fs.existsSync(libAuthTs) || fs.existsSync(libAuthJs);
-  const useTypeScript = fs.existsSync(libAuthTs);
+
+  // Detect TypeScript usage:
+  // 1. If lib/auth.ts exists, it's TypeScript
+  // 2. If lib/auth.js exists, it's JavaScript
+  // 3. If neither exists, check for tsconfig.json
+  // 4. If still unclear, check existing API routes
+  let useTypeScript = false;
+
+  if (fs.existsSync(libAuthTs)) {
+    useTypeScript = true;
+  } else if (fs.existsSync(libAuthJs)) {
+    useTypeScript = false;
+  } else {
+    // Check for tsconfig.json
+    const tsconfigPath = path.join(projectRoot, 'tsconfig.json');
+    if (fs.existsSync(tsconfigPath)) {
+      useTypeScript = true;
+    }
+  }
 
   // Detect app directory
   let appDir = 'app';
@@ -150,7 +168,7 @@ async function analyzeProject(): Promise<ProjectStatus> {
     appDir = 'src/app';
   }
 
-  // Check existing API routes
+  // Check existing API routes (and verify TypeScript detection)
   const apiAuthDir = path.join(projectRoot, appDir, 'api', 'auth');
   const existingRoutes: string[] = [];
 
@@ -159,9 +177,19 @@ async function analyzeProject(): Promise<ProjectStatus> {
     for (const dir of dirs) {
       const routePath = path.join(apiAuthDir, dir);
       if (fs.statSync(routePath).isDirectory()) {
-        const routeFile = path.join(routePath, `route.${useTypeScript ? 'ts' : 'js'}`);
-        if (fs.existsSync(routeFile)) {
+        // Check both .ts and .js to verify TypeScript usage
+        const routeFileTs = path.join(routePath, 'route.ts');
+        const routeFileJs = path.join(routePath, 'route.js');
+
+        if (fs.existsSync(routeFileTs)) {
           existingRoutes.push(dir);
+          useTypeScript = true; // Confirm TypeScript from existing routes
+        } else if (fs.existsSync(routeFileJs)) {
+          existingRoutes.push(dir);
+          // Only set to false if we haven't detected TS yet
+          if (!fs.existsSync(path.join(projectRoot, 'tsconfig.json'))) {
+            useTypeScript = false;
+          }
         }
       }
     }
