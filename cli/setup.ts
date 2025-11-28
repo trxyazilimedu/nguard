@@ -107,6 +107,7 @@ async function gatherConfiguration(): Promise<SetupConfig> {
     { name: 'login', path: '/api/auth/login', default: true },
     { name: 'logout', path: '/api/auth/logout', default: true },
     { name: 'validate', path: '/api/auth/validate', default: true },
+    { name: 'update', path: '/api/auth/update', default: true },
     { name: 'refresh', path: '/api/auth/refresh', default: false },
   ];
 
@@ -286,9 +287,11 @@ export const clearSession = () => nguard.clearSession();
 
 /**
  * Update existing session
+ * @param cookieString - Cookie string from request headers
+ * @param updates - Partial session updates
  */
-export const updateSession = (sessionData${isTs ? ': any' : ''}) =>
-  nguard.updateSession(sessionData);
+export const updateSession = (cookieString${isTs ? ': string | null | undefined' : ''}, updates${isTs ? ': any' : ''}) =>
+  nguard.updateSession(cookieString, updates);
 
 /**
  * Validate a session
@@ -426,6 +429,57 @@ export async function POST(request${isTs ? ': NextRequest' : ''}) {
   } catch (error) {
     return NextResponse.json(
       { error: 'Refresh failed' },
+      { status: 500 }
+    );
+  }
+}
+`,
+
+    update: `import { nguard } from '@/lib/auth';
+import { NextRequest, NextResponse } from 'next/server';
+
+export async function POST(request${isTs ? ': NextRequest' : ''}) {
+  try {
+    // Get updates from request body
+    const updates = await request.json();
+
+    // Get current session from cookie
+    const cookieString = request.headers.get('cookie');
+
+    // Update session (handles security automatically)
+    const { session, token, setCookieHeader } = await nguard.updateSession(
+      cookieString,
+      updates
+    );
+
+    // Return updated session with new cookie
+    return NextResponse.json(
+      {
+        success: true,
+        message: 'Session updated successfully',
+        session,
+        token,
+      },
+      {
+        status: 200,
+        headers: {
+          'Set-Cookie': setCookieHeader,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+  } catch (error) {
+    console.error('Error updating session:', error);
+
+    if (error instanceof Error && error.message === 'No active session found') {
+      return NextResponse.json(
+        { error: 'Unauthorized - Please login first' },
+        { status: 401 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: 'Failed to update session' },
       { status: 500 }
     );
   }

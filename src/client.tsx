@@ -137,28 +137,24 @@ export function SessionProvider({
         if (onInitialize) {
           loadedSession = await onInitialize();
         } else {
-          // Fallback: try to get from cookie
-          const token = getCookieClient(cookieName);
-          if (token) {
-            // Try to decode token (basic implementation)
-            try {
-              const base64Url = token.split('.')[1];
-              const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-              const jsonPayload = decodeURIComponent(
-                atob(base64)
-                  .split('')
-                  .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-                  .join('')
-              );
-              const payload = JSON.parse(jsonPayload);
-              loadedSession = {
-                user: payload.user,
-                expires: payload.exp * 1000,
-                data: payload.data,
-              };
-            } catch (e) {
-              // Token decode failed, session will be null
+          // Since cookies are HttpOnly, we need to validate via server endpoint
+          // This is the secure way - cookies are sent automatically with fetch
+          try {
+            const response = await fetch('/api/auth/validate', {
+              method: 'GET',
+              credentials: 'include', // Send HttpOnly cookies automatically
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              if (data.valid && data.session) {
+                loadedSession = data.session;
+              }
             }
+          } catch (e) {
+            // Validation endpoint not available or failed
+            // This is expected if /api/auth/validate doesn't exist
+            // Session will remain null
           }
         }
 
@@ -181,6 +177,7 @@ export function SessionProvider({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(credentials),
+      credentials: 'include', // Ensure cookies are sent and received
     });
 
     if (!response.ok) {
@@ -211,12 +208,9 @@ export function SessionProvider({
       setSession(newSession);
       setStatus('authenticated');
 
-      // Store token in cookie if provided
-      if (sessionData.token) {
-        setCookieClient(cookieName, sessionData.token, {
-          maxAge: 24 * 60 * 60,
-        });
-      }
+      // NOTE: We don't set cookies client-side because they are HttpOnly
+      // The server already sets the cookie via Set-Cookie header
+      // Client-side cookie setting would fail anyway due to HttpOnly flag
 
       onSessionChange?.(newSession);
 
@@ -240,6 +234,7 @@ export function SessionProvider({
   const defaultLogout = async () => {
     const response = await fetch('/api/auth/logout', {
       method: 'POST',
+      credentials: 'include', // Ensure cookies are sent
     });
 
     if (!response.ok) {
@@ -284,45 +279,110 @@ export function SessionProvider({
 
   // Default update session handler
   const defaultUpdateSession = async (updates: Partial<Session>) => {
-    const response = await fetch('/api/auth/update', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
-      credentials: 'include',
-    });
+    try {
+      const response = await fetch('/api/auth/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+        credentials: 'include',
+      });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Session update failed');
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        // If not JSON (likely 404 HTML page), return null to trigger local-only update
+        return null;
+      }
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Session update failed');
+      }
+
+      return await response.json();
+    } catch (error) {
+      // If fetch fails (endpoint not found, network error, etc.), return null for local-only update
+      if (error instanceof TypeError || (error instanceof Error && error.message.includes('Failed to fetch'))) {
+        return null;
+      }
+      throw error;
     }
-
-    return await response.json();
   };
 
   const updateSession = async (updates: Partial<Session>): Promise<any> => {
     setIsLoading(true);
     try {
-      // Use custom callback if provided, otherwise use default
-      const updateFn = onUpdateSession || defaultUpdateSession;
-      const responseData = await updateFn(updates);
+      let responseData = null;
 
-      // Extract session from response
-      const updatedSession: Session = responseData.session || responseData;
-
-      setSession(updatedSession);
-      setStatus('authenticated');
-
-      // Update cookie if token is provided
-      if (responseData.token) {
-        setCookieClient(cookieName, responseData.token, {
-          maxAge: 24 * 60 * 60,
-        });
+      // Try to sync with server if callback provided or default endpoint exists
+      if (onUpdateSession) {
+        responseData = await onUpdateSession(updates);
+      } else {
+        responseData = await defaultUpdateSession(updates);
       }
 
-      onSessionChange?.(updatedSession);
+      // If server sync successful, use server response
+      if (responseData && responseData.session) {
+        const updatedSession: Session = responseData.session;
 
-      // Return API response
-      return responseData;
+        setSession(updatedSession);
+        setStatus('authenticated');
+
+        // Update cookie if token is provided
+        if (responseData.token) {
+          setCookieClient(cookieName, responseData.token, {
+            maxAge: 24 * 60 * 60,
+          });
+        }
+
+        onSessionChange?.(updatedSession);
+
+        return responseData;
+      }
+
+      // If server sync failed or not available, do local-only update
+      // This happens when:
+      // 1. /api/auth/update endpoint doesn't exist
+      // 2. Network error
+      // 3. Server returned non-JSON response
+      if (session) {
+        // IMPORTANT: Local-only updates are temporary and will be lost on page refresh
+        // because session cookies are HttpOnly and cannot be updated from client-side JavaScript
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            '[Nguard] Session update is local-only. Changes will be lost on page refresh.\n' +
+            'To persist changes, create a /api/auth/update endpoint or provide an onUpdateSession callback.\n' +
+            'See: https://github.com/anthropics/nguard/blob/main/examples/api-update-session.ts'
+          );
+        }
+
+        const updatedSession: Session = {
+          ...session,
+          ...updates,
+          // Deep merge user if provided
+          user: updates.user
+            ? { ...session.user, ...updates.user }
+            : session.user,
+          // Deep merge data if provided
+          data: updates.data
+            ? { ...session.data, ...updates.data }
+            : session.data,
+        };
+
+        setSession(updatedSession);
+        setStatus('authenticated');
+        onSessionChange?.(updatedSession);
+
+        return {
+          success: true,
+          message: 'Session updated locally (server sync not available)',
+          session: updatedSession,
+          localOnly: true, // Flag to indicate this was local-only update
+          warning: 'Changes will be lost on page refresh. Create /api/auth/update endpoint to persist.',
+        };
+      }
+
+      throw new Error('No active session to update');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to update session';
 

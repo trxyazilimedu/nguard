@@ -516,7 +516,7 @@ export class NguardServer {
    * - Old session invalidation
    */
   async updateSession(
-      cookieString: string | undefined,
+      cookieString: string | null | undefined,
       updates: Partial<Session>,
       options?: SessionOptions & {
         ipAddress?: string;
@@ -531,7 +531,7 @@ export class NguardServer {
 
     // Security Check 2: Get and validate current session
     const currentSession = await this.validateSession(
-        cookieString,
+        cookieString ?? undefined,
         undefined,
         options
     );
