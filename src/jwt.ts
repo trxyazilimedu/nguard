@@ -31,13 +31,17 @@ export class JWTHandler {
         noTimestamp: false,
       });
     } catch (error) {
-      console.error('Error encoding JWT:', error);
+      // SECURITY: Only log detailed errors in development
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error encoding JWT:', error);
+      }
       throw new Error('Failed to encode JWT token');
     }
   }
 
   /**
    * Verify and decode a JWT token
+   * Security: Does not leak error details in production
    */
   decode(token: string): SessionPayload | null {
     try {
@@ -46,7 +50,11 @@ export class JWTHandler {
       });
       return decoded as SessionPayload;
     } catch (error) {
-      console.error('Error decoding JWT:', error);
+      // SECURITY: Only log detailed errors in development to prevent information leakage
+      // Production logs should not reveal JWT internals or validation failures
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Error decoding JWT:', error);
+      }
       return null;
     }
   }

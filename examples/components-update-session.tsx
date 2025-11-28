@@ -1,6 +1,11 @@
 /**
  * Example React Components for Session Updates
- * Shows how to use updateSession() hook in different scenarios
+ * Shows how to use the new updateSession() API with partial updates
+ *
+ * You can now update:
+ * - user.* fields (name, email, etc.)
+ * - data.* fields (theme, language, etc.)
+ * - Custom session fields directly
  */
 
 'use client';
@@ -23,24 +28,15 @@ export function ThemeSwitcher() {
     }
 
     try {
-      const response = await fetch('/api/auth/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme }),
+      // New API: Send partial updates directly
+      // Cookie is automatically updated by the backend
+      const result = await updateSession({
+        data: { theme }
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update theme');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update theme');
       }
-
-      const data = await response.json();
-
-      // Update session with new theme
-      await updateSession(
-        data.session.user,
-        data.session.data
-      );
 
       // Apply theme to DOM
       document.documentElement.setAttribute('data-theme', theme);
@@ -89,20 +85,14 @@ export function LanguageSelector() {
     }
 
     try {
-      const response = await fetch('/api/auth/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language: newLanguage }),
+      // New API: Send partial updates directly
+      const result = await updateSession({
+        data: { language: newLanguage }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update language');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update language');
       }
-
-      const data = await response.json();
-
-      // Update session
-      await updateSession(data.session.user, data.session.data);
 
       // Update local state
       setSelectedLanguage(newLanguage);
@@ -187,21 +177,14 @@ export function SettingsPanel() {
     try {
       setSaveMessage(null);
 
-      const response = await fetch('/api/auth/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settings),
+      // New API: Send partial updates directly
+      const result = await updateSession({
+        data: settings
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to save settings');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save settings');
       }
-
-      const data = await response.json();
-
-      // Update session
-      await updateSession(data.session.user, data.session.data);
 
       setSaveMessage('✅ Settings saved successfully!');
       setErrors([]);
@@ -450,23 +433,14 @@ export function ProfileUpdate() {
     }
 
     try {
-      const response = await fetch('/api/auth/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+      // New API: Send partial user updates directly
+      const result = await updateSession({
+        user: formData
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to update profile');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update profile');
       }
-
-      const data = await response.json();
-
-      // Update session with new profile data
-      await updateSession(
-        { ...user, ...formData },
-        session?.data
-      );
 
       setMessage({ type: 'success', text: '✅ Profile updated successfully!' });
     } catch (error) {
@@ -516,6 +490,69 @@ export function ProfileUpdate() {
           {isLoading ? 'Updating...' : 'Update Profile'}
         </button>
       </form>
+    </div>
+  );
+}
+
+// ============================================================================
+// Example 6: Custom Session Fields Update
+// ============================================================================
+
+export function CustomSessionFieldsExample() {
+  const { session, updateSession, isLoading } = useSession();
+
+  const handleUpdateCustomFields = async () => {
+    try {
+      // Update custom session fields directly
+      // These fields are at the root level of the session object
+      const result = await updateSession({
+        customField1: 'some custom value',
+        customField2: 123,
+        lastActivity: new Date().toISOString(),
+        // You can also update standard fields at the same time
+        data: {
+          theme: 'dark',
+        },
+      });
+
+      if (result.success) {
+        console.log('Custom fields updated!', result.session);
+      }
+    } catch (error) {
+      console.error('Update failed:', error);
+    }
+  };
+
+  const handleUpdateOnlyUser = async () => {
+    try {
+      // Update only user fields
+      const result = await updateSession({
+        user: {
+          name: 'New Name',
+        },
+      });
+
+      if (result.success) {
+        console.log('User name updated!');
+      }
+    } catch (error) {
+      console.error('Update failed:', error);
+    }
+  };
+
+  return (
+    <div className="custom-fields-example">
+      <h2>Custom Session Fields</h2>
+      <p>Current session:</p>
+      <pre>{JSON.stringify(session, null, 2)}</pre>
+
+      <button onClick={handleUpdateCustomFields} disabled={isLoading}>
+        Update Custom Fields
+      </button>
+
+      <button onClick={handleUpdateOnlyUser} disabled={isLoading}>
+        Update Only User Name
+      </button>
     </div>
   );
 }

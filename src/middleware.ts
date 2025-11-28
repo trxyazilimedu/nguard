@@ -70,14 +70,14 @@ export const requireAuth = (config?: RequireAuthConfig): NguardMiddleware => {
  * Role-based access control middleware
  */
 export interface RequireRoleConfig {
-  roles: string | string[];
   redirectTo?: string;
 }
 
-export const requireRole = (config: RequireRoleConfig | string | string[]): NguardMiddleware => {
-  // Support both legacy format (direct roles) and new config format
-  const roles = typeof config === 'object' && 'roles' in config ? config.roles : config;
-  const redirectTo: string = typeof config === 'object' && 'redirectTo' in config ? (config.redirectTo ?? '/login') : '/login';
+export const requireRole = (
+  roles: string | string[],
+  config?: RequireRoleConfig
+): NguardMiddleware => {
+  const redirectTo: string = config?.redirectTo ?? '/login';
   const roleList = Array.isArray(roles) ? roles : [roles];
 
   return (request: NextRequest, session: Session | null) => {
@@ -100,16 +100,14 @@ export const requireRole = (config: RequireRoleConfig | string | string[]): Ngua
  * Permission-based access control middleware
  */
 export interface RequirePermissionConfig {
-  permissions: string | string[];
   redirectTo?: string;
 }
 
 export const requirePermission = (
-  config: RequirePermissionConfig | string | string[]
+  permissions: string | string[],
+  config?: RequirePermissionConfig
 ): NguardMiddleware => {
-  // Support both legacy format (direct permissions) and new config format
-  const permissions = typeof config === 'object' && 'permissions' in config ? config.permissions : config;
-  const redirectTo: string = typeof config === 'object' && 'redirectTo' in config ? (config.redirectTo ?? '/login') : '/login';
+  const redirectTo: string = config?.redirectTo ?? '/login';
   const permissionList = Array.isArray(permissions) ? permissions : [permissions];
 
   return (request: NextRequest, session: Session | null) => {
@@ -153,9 +151,16 @@ const rateLimitStore = new Map<string, number[]>();
 export const rateLimit = (config: RateLimitConfig): NguardMiddleware => {
   return (request: NextRequest, session: Session | null) => {
     // Use user ID if authenticated, otherwise use IP from headers
+    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip');
     const identifier = session
       ? (session as any).id
-      : request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+      : ipAddress;
+
+    // SECURITY: Skip rate limiting if no identifier available to avoid shared key issues
+    // This prevents all users without IP from sharing the same rate limit
+    if (!identifier) {
+      return; // No rate limiting applied
+    }
 
     const key = `rate-limit:${identifier}`;
     const now = Date.now();

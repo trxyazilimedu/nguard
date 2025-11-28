@@ -22,6 +22,12 @@ export type LoginCallback<T = any> = (credentials: T) => Promise<any>;
 export type LogoutCallback = () => Promise<void>;
 
 /**
+ * Update session callback function type
+ * Implement this to handle session updates with your own backend
+ */
+export type UpdateSessionCallback = (updates: Partial<Session>) => Promise<any>;
+
+/**
  * Initialize session callback function type
  * Implement this to load session from your backend or storage
  */
@@ -62,7 +68,7 @@ interface SessionContextType {
   status: 'loading' | 'authenticated' | 'unauthenticated';
   login: <T = any>(credentials: T) => Promise<any>;
   logout: () => Promise<any>;
-  updateSession: (user: SessionUser, data?: SessionData) => Promise<any>;
+  updateSession: (updates: Partial<Session>) => Promise<any>;
   isLoading: boolean;
 }
 
@@ -89,6 +95,11 @@ interface SessionProviderProps {
    */
   onLogout?: LogoutCallback;
   /**
+   * Custom update session callback
+   * If not provided, uses default: POST /api/auth/update
+   */
+  onUpdateSession?: UpdateSessionCallback;
+  /**
    * Custom initialize callback
    * If not provided, tries to decode JWT from cookie
    */
@@ -107,6 +118,7 @@ export function SessionProvider({
   cookieName = 'nguard-session',
   onLogin,
   onLogout,
+  onUpdateSession,
   onInitialize,
   onSessionChange,
 }: SessionProviderProps) {
@@ -270,25 +282,47 @@ export function SessionProvider({
     }
   };
 
-  const updateSession = async (user: SessionUser, data?: SessionData): Promise<any> => {
+  // Default update session handler
+  const defaultUpdateSession = async (updates: Partial<Session>) => {
+    const response = await fetch('/api/auth/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Session update failed');
+    }
+
+    return await response.json();
+  };
+
+  const updateSession = async (updates: Partial<Session>): Promise<any> => {
     setIsLoading(true);
     try {
-      const updatedSession: Session = {
-        user,
-        expires: session?.expires || Date.now() + 24 * 60 * 60 * 1000,
-        data,
-      };
+      // Use custom callback if provided, otherwise use default
+      const updateFn = onUpdateSession || defaultUpdateSession;
+      const responseData = await updateFn(updates);
+
+      // Extract session from response
+      const updatedSession: Session = responseData.session || responseData;
 
       setSession(updatedSession);
       setStatus('authenticated');
+
+      // Update cookie if token is provided
+      if (responseData.token) {
+        setCookieClient(cookieName, responseData.token, {
+          maxAge: 24 * 60 * 60,
+        });
+      }
+
       onSessionChange?.(updatedSession);
 
-      // Return the updated session directly
-      return {
-        success: true,
-        message: 'Session updated successfully',
-        session: updatedSession,
-      };
+      // Return API response
+      return responseData;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to update session';
 

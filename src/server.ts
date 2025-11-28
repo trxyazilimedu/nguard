@@ -112,6 +112,76 @@ export interface SecurityOptions {
   rateLimiter?: RateLimiter;
 }
 
+// Protected fields that cannot be updated via updateSession
+// These fields are critical for security and session integrity
+const PROTECTED_SESSION_FIELDS = [
+  'sessionId', 'iat', 'exp', 'expires',
+  '__proto__', 'constructor', 'prototype'
+] as const;
+
+const PROTECTED_USER_FIELDS = [
+  'id' // User ID should never be changed via updateSession
+] as const;
+
+const PROTECTED_DATA_FIELDS = [
+  'role', 'roles', 'permissions', 'isAdmin', 'isSuperAdmin',
+  '_ipHash', '_uaHash' // Internal security fields
+] as const;
+
+// Maximum size for update payload (10KB)
+const MAX_UPDATE_SIZE = 10 * 1024;
+
+// Sanitize string to prevent XSS
+function sanitizeString(value: any): any {
+  if (typeof value === 'string') {
+    // Remove potentially dangerous characters
+    return value
+      .replace(/[<>]/g, '')
+      .trim()
+      .slice(0, 1000); // Max 1000 chars per string
+  }
+  return value;
+}
+
+// Sanitize object recursively
+function sanitizeObject(obj: any, depth: number = 0): any {
+  // Prevent deep nesting (DoS protection)
+  if (depth > 5) return {};
+
+  if (obj === null || obj === undefined) return obj;
+
+  if (Array.isArray(obj)) {
+    return obj.slice(0, 100).map(item => sanitizeObject(item, depth + 1));
+  }
+
+  if (typeof obj === 'object') {
+    const sanitized: any = {};
+    let fieldCount = 0;
+
+    for (const [key, value] of Object.entries(obj)) {
+      // Limit number of fields (DoS protection)
+      if (fieldCount++ > 50) break;
+
+      // Skip prototype pollution attempts
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+        continue;
+      }
+
+      if (typeof value === 'string') {
+        sanitized[key] = sanitizeString(value);
+      } else if (typeof value === 'object') {
+        sanitized[key] = sanitizeObject(value, depth + 1);
+      } else {
+        sanitized[key] = value;
+      }
+    }
+
+    return sanitized;
+  }
+
+  return obj;
+}
+
 export class NguardServer {
   private config: NguardConfig;
   private jwtHandler: JWTHandler;
@@ -228,6 +298,7 @@ export class NguardServer {
 
   /**
    * Create a new session with security features
+   * Security: Sanitizes input to prevent XSS and injection attacks
    */
   async createSession(
       sessionData: Session,
@@ -236,9 +307,12 @@ export class NguardServer {
         userAgent?: string;
       }
   ): Promise<{ token: string; setCookieHeader: string; session: Session }> {
+    // SECURITY: Sanitize session data to prevent XSS and prototype pollution
+    const sanitizedSessionData = sanitizeObject(sessionData);
+
     // Rate limiting check
-    if (this.securityOptions.enableRateLimit && sessionData.user) {
-      const canProceed = await this.rateLimiter.check(`create:${sessionData.user.id}`);
+    if (this.securityOptions.enableRateLimit && sanitizedSessionData.user) {
+      const canProceed = await this.rateLimiter.check(`create:${sanitizedSessionData.user.id}`);
       if (!canProceed) {
         throw new Error('Rate limit exceeded. Please try again later.');
       }
@@ -248,9 +322,9 @@ export class NguardServer {
     if (
         this.securityOptions.enableBlacklist &&
         this.securityOptions.maxSessionsPerUser &&
-        sessionData.user
+        sanitizedSessionData.user
     ) {
-      const userSessions = this.activeSessionsByUser.get(sessionData.user.id) || new Set();
+      const userSessions = this.activeSessionsByUser.get(sanitizedSessionData.user.id) || new Set();
       if (userSessions.size >= this.securityOptions.maxSessionsPerUser) {
         const oldestSession = Array.from(userSessions)[0];
         await this.sessionBlacklist.add(oldestSession);
@@ -264,7 +338,7 @@ export class NguardServer {
     const expiresAt = now + maxAge;
 
     // Add IP binding if enabled
-    let enhancedData = { ...sessionData.data };
+    let enhancedData = { ...sanitizedSessionData.data };
     if (this.securityOptions.enableIpBinding && options?.ipAddress) {
       enhancedData = {
         ...enhancedData,
@@ -274,11 +348,13 @@ export class NguardServer {
     }
 
     // Create JWT payload from session data
+    // Spread all session data to preserve custom fields like role, permissions, etc.
     let payload: SessionPayload = {
+      ...sanitizedSessionData,
       sessionId,
       iat: now,
       exp: expiresAt,
-      user: sessionData.user,
+      user: sanitizedSessionData.user,
       data: enhancedData,
     };
 
@@ -291,15 +367,15 @@ export class NguardServer {
     const token = this.jwtHandler.encode(payload);
 
     // Track active session
-    if (this.securityOptions.enableBlacklist && sessionData.user) {
-      const userSessions = this.activeSessionsByUser.get(sessionData.user.id) || new Set();
+    if (this.securityOptions.enableBlacklist && sanitizedSessionData.user) {
+      const userSessions = this.activeSessionsByUser.get(sanitizedSessionData.user.id) || new Set();
       userSessions.add(sessionId);
-      this.activeSessionsByUser.set(sessionData.user.id, userSessions);
+      this.activeSessionsByUser.set(sanitizedSessionData.user.id, userSessions);
     }
 
     // Create session object with expiration
     let session: Session = {
-      ...sessionData,
+      ...sanitizedSessionData,
       data: enhancedData,
       expires: expiresAt * 1000, // Convert to milliseconds for JS
     };
@@ -321,7 +397,7 @@ export class NguardServer {
     );
 
     this.log('SESSION_CREATED', {
-      userId: sessionData.user?.id,
+      userId: sanitizedSessionData.user?.id,
       sessionId,
       ipAddress: options?.ipAddress,
     });
@@ -345,9 +421,9 @@ export class NguardServer {
       }
   ): Promise<Session | null> {
     // Rate limiting for validation
-    if (this.securityOptions.enableRateLimit) {
-      const rateLimitKey = options?.ipAddress || 'unknown';
-      const canProceed = await this.rateLimiter.check(`validate:${rateLimitKey}`);
+    // SECURITY: Only apply rate limiting if IP address is available to avoid shared key issues
+    if (this.securityOptions.enableRateLimit && options?.ipAddress) {
+      const canProceed = await this.rateLimiter.check(`validate:${options.ipAddress}`);
       if (!canProceed) {
         throw new Error('Too many validation attempts');
       }
@@ -396,10 +472,17 @@ export class NguardServer {
       }
     }
 
+    // Restore session from payload, preserving all custom fields
+    // Filter out JWT-specific fields (sessionId, iat, exp)
+    const { sessionId, iat, exp, ...sessionFields } = payload;
+
+    // SECURITY: Sanitize payload data as defense in depth
+    // Even though JWT is signed, this protects against compromised secrets
+    const sanitizedFields = sanitizeObject(sessionFields);
+
     let session: Session = {
-      user: payload.user,
-      expires: payload.exp * 1000,
-      data: payload.data,
+      ...sanitizedFields,
+      expires: exp * 1000,
     };
 
     // Apply session callbacks
@@ -419,13 +502,132 @@ export class NguardServer {
   }
 
   /**
-   * Update session data
+   * Update session - merges partial updates with current session
+   * Supports updating any session field including custom fields
+   *
+   * Security features:
+   * - Protected fields filtering (role, permissions, sessionId, etc.)
+   * - Input validation and sanitization
+   * - Size limits (max 10KB)
+   * - Rate limiting
+   * - XSS protection
+   * - Prototype pollution prevention
+   * - User ID protection
+   * - Old session invalidation
    */
   async updateSession(
-      sessionData: Session,
-      options?: SessionOptions
+      cookieString: string | undefined,
+      updates: Partial<Session>,
+      options?: SessionOptions & {
+        ipAddress?: string;
+        userAgent?: string;
+      }
   ): Promise<{ token: string; setCookieHeader: string; session: Session }> {
-    return this.createSession(sessionData, options);
+    // Security Check 1: Payload size limit (DoS prevention)
+    const updateSize = JSON.stringify(updates).length;
+    if (updateSize > MAX_UPDATE_SIZE) {
+      throw new Error(`Update payload too large. Maximum size is ${MAX_UPDATE_SIZE} bytes`);
+    }
+
+    // Security Check 2: Get and validate current session
+    const currentSession = await this.validateSession(
+        cookieString,
+        undefined,
+        options
+    );
+
+    if (!currentSession) {
+      throw new Error('No active session found');
+    }
+
+    // Security Check 3: Rate limiting
+    if (this.securityOptions.enableRateLimit && currentSession.user) {
+      const canProceed = await this.rateLimiter.check(`update:${currentSession.user.id}`);
+      if (!canProceed) {
+        throw new Error('Too many update requests. Please try again later.');
+      }
+    }
+
+    // Security Check 4: Sanitize input to prevent XSS and injection attacks
+    const sanitizedUpdates = sanitizeObject(updates);
+
+    // Security Check 5: Remove protected session-level fields
+    const safeUpdates: any = { ...sanitizedUpdates };
+    for (const field of PROTECTED_SESSION_FIELDS) {
+      delete safeUpdates[field];
+    }
+
+    // Security Check 6: Handle user object with protected fields
+    if (safeUpdates.user) {
+      const safeUser = { ...safeUpdates.user };
+
+      // Remove protected user fields (especially user.id)
+      for (const field of PROTECTED_USER_FIELDS) {
+        delete safeUser[field];
+      }
+
+      // Ensure user.id stays the same
+      safeUpdates.user = {
+        ...safeUser,
+        id: currentSession.user.id // Force original user ID
+      };
+    }
+
+    // Security Check 7: Handle data object with protected fields
+    if (safeUpdates.data) {
+      const safeData = { ...safeUpdates.data };
+
+      // Remove protected data fields (role, permissions, etc.)
+      for (const field of PROTECTED_DATA_FIELDS) {
+        delete safeData[field];
+      }
+
+      safeUpdates.data = safeData;
+    }
+
+    // Deep merge safe updates with current session
+    const updatedSessionData: Session = {
+      ...currentSession,
+      ...safeUpdates,
+      // Deep merge user object if provided
+      user: safeUpdates.user
+          ? { ...currentSession.user, ...safeUpdates.user }
+          : currentSession.user,
+      // Deep merge data object if provided
+      data: safeUpdates.data
+          ? { ...currentSession.data, ...safeUpdates.data }
+          : currentSession.data,
+    };
+
+    // Remove expires field as it will be set by createSession
+    delete (updatedSessionData as any).expires;
+
+    // Security Check 8: Invalidate old session if blacklist is enabled
+    // This prevents session fixation attacks
+    const oldSessionId = (currentSession as any).sessionId;
+    if (this.securityOptions.enableBlacklist && oldSessionId) {
+      await this.sessionBlacklist.add(oldSessionId);
+
+      // Remove from active sessions list
+      if (currentSession.user) {
+        const userSessions = this.activeSessionsByUser.get(currentSession.user.id);
+        if (userSessions) {
+          userSessions.delete(oldSessionId);
+        }
+      }
+    }
+
+    // Create new session with updated data
+    const result = await this.createSession(updatedSessionData, options);
+
+    this.log('SESSION_UPDATED', {
+      userId: currentSession.user?.id,
+      oldSessionId,
+      newSessionId: (result.session as any).sessionId,
+      updatedFields: Object.keys(safeUpdates),
+    });
+
+    return result;
   }
 
   /**

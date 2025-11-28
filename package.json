@@ -1,8 +1,8 @@
 {
   "name": "nguard",
-  "version": "0.3.5",
+  "version": "0.4.0",
   "description": "Next.js 16+ session management library with built-in auth() function, callback-based architecture, and zero-config SessionProvider",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "bin": {
     "nguard-setup": "dist/cli/setup.js"
   },
@@ -10,22 +10,22 @@
     "type": "git",
     "url": "https://github.com/trxyazilimedu/nguard.git"
   },
-  "types": "dist/index.d.ts",
+  "types": "dist/src/index.d.ts",
   "exports": {
     ".": {
-      "require": "./dist/index.js",
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/src/index.js",
+      "import": "./dist/src/index.js",
+      "types": "./dist/src/index.d.ts"
     },
     "./server": {
-      "require": "./dist/server.js",
-      "import": "./dist/server.js",
-      "types": "./dist/server.d.ts"
+      "require": "./dist/src/server.js",
+      "import": "./dist/src/server.js",
+      "types": "./dist/src/server.d.ts"
     },
     "./client": {
-      "require": "./dist/client.js",
-      "import": "./dist/client.js",
-      "types": "./dist/client.d.ts"
+      "require": "./dist/src/client.js",
+      "import": "./dist/src/client.js",
+      "types": "./dist/src/client.d.ts"
     }
   },
   "scripts": {

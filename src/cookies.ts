@@ -9,6 +9,7 @@ const DEFAULT_MAX_AGE = 24 * 60 * 60; // 24 hours in seconds
 
 /**
  * Parse cookie string from request headers
+ * Security: Handles malformed cookies gracefully to prevent DoS
  */
 export function parseCookies(cookieString?: string): Record<string, string> {
   const cookies: Record<string, string> = {};
@@ -18,7 +19,13 @@ export function parseCookies(cookieString?: string): Record<string, string> {
   cookieString.split(';').forEach((cookie) => {
     const [name, value] = cookie.split('=');
     if (name && value) {
-      cookies[decodeURIComponent(name.trim())] = decodeURIComponent(value.trim());
+      try {
+        // SECURITY: Wrap decode in try-catch to prevent DoS from malformed cookies
+        cookies[decodeURIComponent(name.trim())] = decodeURIComponent(value.trim());
+      } catch (error) {
+        // Silently ignore malformed cookies
+        // Don't log to prevent log flooding attacks
+      }
     }
   });
 
@@ -35,6 +42,7 @@ export function getCookie(name: string, cookieString?: string): string | null {
 
 /**
  * Format cookie string for Set-Cookie header
+ * Security: Always sets HttpOnly to prevent XSS attacks
  */
 export function formatSetCookie(
   name: string,
@@ -63,6 +71,9 @@ export function formatSetCookie(
     cookieString += '; Secure';
   }
 
+  // SECURITY: HttpOnly prevents JavaScript access to cookies (XSS protection)
+  cookieString += '; HttpOnly';
+
   return cookieString;
 }
 
@@ -75,6 +86,7 @@ export function formatClearCookie(name: string): string {
 
 /**
  * Client-side cookie setter (for use in browser)
+ * Security: Automatically sets Secure flag on HTTPS connections
  */
 export function setCookieClient(
   name: string,
@@ -86,7 +98,7 @@ export function setCookieClient(
     return;
   }
 
-  const { maxAge = DEFAULT_MAX_AGE, sameSite = 'Lax' } = options;
+  const { maxAge = DEFAULT_MAX_AGE, sameSite = 'Lax', secure = true } = options;
 
   let cookieString = `${encodeURIComponent(name)}=${encodeURIComponent(value)}`;
 
@@ -96,6 +108,12 @@ export function setCookieClient(
 
   cookieString += `; Path=/`;
   cookieString += `; SameSite=${sameSite}`;
+
+  // SECURITY: Add Secure flag on HTTPS connections
+  // Note: We cannot set HttpOnly from client-side JavaScript
+  if (secure && typeof window !== 'undefined' && window.location.protocol === 'https:') {
+    cookieString += '; Secure';
+  }
 
   document.cookie = cookieString;
 }
